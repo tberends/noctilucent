@@ -2,8 +2,7 @@ name: Retrieve data and create figures
 
 on:
   schedule:
-    # Runs every day at 17:00 UTC
-    - cron: '00 15 * * *'
+    - cron: '00 16 * * *'
 
 jobs:
   generate-and-commit-csv:
@@ -23,7 +22,7 @@ jobs:
 
       # Step 3: Install dependencies
       - name: Install dependencies
-        run: pip install requests bs4 numpy warnings pickle pandas matplotlib
+        run: pip install requests bs4 numpy pickle pandas matplotlib
 
       # Step 4: Execute the Python script to create a CSV
       - name: Retrieve data and create figures
