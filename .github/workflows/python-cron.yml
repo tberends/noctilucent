@@ -22,7 +22,7 @@ jobs:
 
       # Step 3: Install dependencies
       - name: Install dependencies
-        run: pip install requests bs4 numpy pickle pandas matplotlib
+        run: pip install requests bs4 numpy pandas matplotlib
 
       # Step 4: Execute the Python script to create a CSV
       - name: Retrieve data and create figures
