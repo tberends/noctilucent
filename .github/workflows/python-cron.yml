@@ -2,7 +2,7 @@ name: Retrieve data and create figures
 
 on:
   schedule:
-    - cron: '00 16 * * *'
+    - cron: '00 17 * * *'
 
 jobs:
   generate-and-commit-csv:
