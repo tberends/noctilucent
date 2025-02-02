@@ -1,0 +1,54 @@
+name: Retrieve data and create figures
+
+on:
+  schedule:
+    # Runs every day at 17:00 UTC
+    - cron: '00 15 * * *'
+
+jobs:
+  generate-and-commit-csv:
+    runs-on: ubuntu-latest
+    permissions:                # Job-level permissions configuration starts hier
+      contents: write           # 'write' access to repository contents
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      # Step 2: Setup Python environment
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.13' # Install the Python version needed
+
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: pip install requests bs4 numpy warnings pickle pandas matplotlib
+
+      # Step 4: Execute the Python script to create a CSV
+      - name: Retrieve data and create figures
+        run: python main.py
+
+      # Step 5: Commit and push the generated CSV file if there are changes
+      - name: Commit files
+        id: commit
+        run: |
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add data/*
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Retrieve data and create figures"
+            echo "changes=true" >> $GITHUB_ENV
+          else
+            echo "No changes to commit"
+            echo "changes=false" >> $GITHUB_ENV
+            exit 0
+          fi        
+      - name: Push changes
+        if: success() && env.changes == 'true'
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+          directory: .
+          force: true
