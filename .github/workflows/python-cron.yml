@@ -34,7 +34,7 @@ jobs:
         run: |
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          gt add data/* app/visualizations/*
+          git add data/* app/visualizations/*
           if [ -n "$(git status --porcelain)" ]; then
             git commit -m "Retrieve data and create figures"
             echo "changes=true" >> $GITHUB_ENV
