@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: pip install requests bs4 numpy pandas matplotlib
 
-      # Step 4: Execute the Python script to create a CSV
+      # Step 4: Execute the Python script to create a pickle
       - name: Retrieve data and create figures
         run: python main.py
 
@@ -34,7 +34,7 @@ jobs:
         run: |
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add data/*
+          gt add data/* app/visualizations/*
           if [ -n "$(git status --porcelain)" ]; then
             git commit -m "Retrieve data and create figures"
             echo "changes=true" >> $GITHUB_ENV
