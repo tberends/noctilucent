@@ -1,14 +1,16 @@
 document.addEventListener('DOMContentLoaded', () => {
     const figuresContainer = document.getElementById('figures-container');
-    const images = [
-        'sounding_plot.png',
-        // Add more image filenames here
+    const htmlFiles = [
+        'sounding_plot.html',
+        // Add more HTML filenames here
     ];
 
-    images.forEach(file => {
-        const img = document.createElement('img');
-        img.src = `app/visualizations/${file}`;
-        img.alt = file;
-        figuresContainer.appendChild(img);
+    htmlFiles.forEach(file => {
+        const iframe = document.createElement('iframe');
+        iframe.src = `app/visualizations/${file}`;
+        iframe.width = '100%';
+        iframe.height = '1000px';
+        iframe.style.border = 'none';
+        figuresContainer.appendChild(iframe);
     });
 });

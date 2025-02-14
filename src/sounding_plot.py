@@ -1,10 +1,9 @@
-
-#%%
-import matplotlib.pyplot as plt
 import pandas as pd
-from datetime import datetime
 import numpy as np
 import pickle
+from datetime import datetime, timedelta
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 def plot_sounding():
     # Load the data from pickle file in the data folder
@@ -51,21 +50,66 @@ def plot_sounding():
         if np.any(mask):
             temp_grid[:, i] = np.interp(unique_heights, height_arr[mask], temp_arr[mask])
 
-    # Plot using pcolormesh
-    plt.figure(figsize=(20, 10))
-    plt.pcolormesh(unique_times, unique_heights, temp_grid, cmap='coolwarm', shading='auto')
-    plt.colorbar(label='Temperature (°C)')
-    plt.xlabel('Time')
-    plt.ylabel('Height (m)')
-    plt.title('Temperature Profile')
-    plt.grid(True)
+    # Create the interactive plot
+    fig = make_subplots(rows=1, cols=1)
 
-    # Add contour lines
-    contour = plt.contour(unique_times, unique_heights, temp_grid, colors='black', linewidths=0.5)
-    plt.clabel(contour, inline=True, fontsize=8, fmt='%1.0f')
+    # Add heatmap
+    heatmap = go.Heatmap(
+        x=unique_times,
+        y=unique_heights,
+        z=temp_grid,
+        colorscale='thermal',
+        colorbar=dict(title='Temperatuur (°C)')
+    )
+    fig.add_trace(heatmap)
+
+    # # Add contour lines
+    # contour = go.Contour(
+    #     x=unique_times,
+    #     y=unique_heights,
+    #     z=temp_grid,
+    #     line_width=1.5,
+    #     showscale=False,
+    #     contours=dict(
+    #         coloring='lines'
+    #     ),
+    #     colorscale='gray',
+    #     opacity=0.5
+    # )
+    # fig.add_trace(contour)
+
+    # Update layout
+    # Get station number from the first entry in data
+    first_key = list(data.keys())[0]
+    station_number = data[first_key]['station_info']['Station number']
+    
+    fig.update_layout(
+        title=dict(
+            text=f'Temparatuurprofiel - Station {station_number}',
+            font=dict(size=24, weight='bold')
+        ),
+        xaxis_title=dict(text='Datum', font=dict(size=18, weight='bold')),
+        yaxis_title=dict(text='Hoogte (m)', font=dict(size=18, weight='bold')),
+        xaxis=dict(
+            rangeselector=dict(
+                buttons=list([
+                    dict(count=7, label="Afgelopen week", step="day", stepmode="backward"),
+                    dict(count=1, label="Afgelopen maand", step="month", stepmode="backward"),
+                    dict(count=3, label="Afgelopen 3 maand", step="month", stepmode="backward"),
+                    dict(count=1, label="Huidige jaar", step="year", stepmode="todate"),
+                    dict(count=1, label="Afgelopen jaar", step="year", stepmode="backward"),
+                    dict(label="Alle data", step="all")
+                ])
+            ),
+            rangeslider=dict(visible=True),
+            type="date",
+            tickfont=dict(size=14)
+        ),
+        yaxis=dict(tickfont=dict(size=14))
+    )
 
     # Save the plot to a file in folder visualizations
-    plt.savefig('app/visualizations/sounding_plot.png')
+    fig.write_html('app/visualizations/sounding_plot.html')
 
 if __name__ == '__main__':
     plot_sounding()
