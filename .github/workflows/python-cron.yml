@@ -3,6 +3,7 @@ name: Retrieve data and create figures
 on:
   schedule:
     - cron: '00 17 * * *'
+  workflow_dispatch:  # Voegt mogelijkheid toe om workflow handmatig te starten
 
 jobs:
   generate-and-commit-csv:
