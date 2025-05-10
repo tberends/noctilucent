@@ -98,6 +98,55 @@ h2 {
     padding: 1rem;
 }
 
+/* Measurement Info Section */
+.measurement-info {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+    padding: 2rem;
+    margin-bottom: 3rem;
+    transition: transform 0.3s ease;
+}
+
+.measurement-info:hover {
+    transform: translateY(-5px);
+}
+
+.measurement-info h3 {
+    color: var(--secondary-color);
+    font-size: 1.5rem;
+    margin-bottom: 1.2rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid rgba(52, 152, 219, 0.3);
+}
+
+.measurement-info p {
+    margin-bottom: 1.2rem;
+    line-height: 1.7;
+    color: var(--text-color);
+}
+
+.measurement-info ul {
+    margin-left: 2rem;
+    margin-bottom: 1.2rem;
+}
+
+.measurement-info li {
+    margin-bottom: 0.6rem;
+    position: relative;
+}
+
+.measurement-info li::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--secondary-color);
+    position: absolute;
+    left: -1.2rem;
+    top: 0.5rem;
+}
+
 /* Footer */
 .main-footer {
     background-color: var(--primary-color);

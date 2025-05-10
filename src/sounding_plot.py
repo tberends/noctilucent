@@ -5,6 +5,41 @@ from datetime import datetime, timedelta
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+def find_tropopause(heights, temps):
+    """
+    Bepaalt de hoogte van de tropopauze volgens WMO-definitie:
+    - Het laagste niveau waar de temperatuurgradiënt kleiner wordt dan -2°C/km
+    - De gemiddelde gradiënt tussen dit niveau en alle hogere niveaus binnen 2 km
+      is niet kleiner dan -2°C/km
+    """
+    if len(heights) < 2 or len(temps) < 2:
+        return None
+    
+    # Sorteer de data op hoogte (voor het geval dat)
+    sort_idx = np.argsort(heights)
+    heights = heights[sort_idx]
+    temps = temps[sort_idx]
+    
+    # Bereken temperatuurgradiënt in °C/km
+    gradients = np.zeros(len(heights)-1)
+    for i in range(len(heights)-1):
+        height_diff = (heights[i+1] - heights[i]) / 1000.0  # conversie naar km
+        if height_diff > 0:  # voorkom delen door nul
+            gradients[i] = (temps[i+1] - temps[i]) / height_diff
+    
+    # Zoek het laagste niveau waar de gradiënt boven -2°C/km komt
+    for i in range(len(gradients)):
+        if heights[i] > 5000 and gradients[i] > -2.0:  # Begin zoeken boven 5 km
+            # Controleer of de gemiddelde gradiënt in de volgende 2 km ook boven -2°C/km blijft
+            next_levels = [j for j in range(i+1, len(heights)) if heights[j] < heights[i] + 2000]
+            
+            if len(next_levels) > 0:
+                mean_gradient = np.mean([gradients[j] for j in range(i, min(i+len(next_levels), len(gradients)))])
+                if mean_gradient > -2.0:
+                    return heights[i]
+    
+    return None
+
 def plot_sounding():
     # Load the data from pickle file in the data folder
     with open('data/sounding.pkl', 'rb') as f:
@@ -50,6 +85,20 @@ def plot_sounding():
         if np.any(mask):
             temp_grid[:, i] = np.interp(unique_heights, height_arr[mask], temp_arr[mask])
 
+    # Bereken tropopauze hoogte voor elke tijdstap
+    tropopause_heights = []
+    tropopause_times = []
+    
+    for i, t in enumerate(unique_times):
+        mask = time_arr == t
+        if np.sum(mask) > 10:  # Zorg ervoor dat er voldoende datapunten zijn
+            heights_at_t = height_arr[mask]
+            temps_at_t = temp_arr[mask]
+            tropopause = find_tropopause(heights_at_t, temps_at_t)
+            if tropopause is not None:
+                tropopause_heights.append(tropopause)
+                tropopause_times.append(t)
+
     # Create the interactive plot
     fig = make_subplots(rows=1, cols=1)
 
@@ -62,6 +111,17 @@ def plot_sounding():
         colorbar=dict(title='Temperatuur (°C)')
     )
     fig.add_trace(heatmap)
+
+    # Voeg tropopauze toe als rode gestippelde lijn
+    if tropopause_heights and tropopause_times:
+        tropopause_line = go.Scatter(
+            x=tropopause_times,
+            y=tropopause_heights,
+            mode='lines',
+            line=dict(color='#FF0000', width=2, dash='dash'),
+            name='Tropopauze (grens tussen troposfeer en stratosfeer)'
+        )
+        fig.add_trace(tropopause_line)
 
     # # Add contour lines
     # contour = go.Contour(
@@ -105,7 +165,8 @@ def plot_sounding():
             type="date",
             tickfont=dict(size=14)
         ),
-        yaxis=dict(tickfont=dict(size=14))
+        yaxis=dict(tickfont=dict(size=14)),
+        legend=dict(font=dict(size=14))
     )
 
     # Save the plot to a file in folder visualizations
