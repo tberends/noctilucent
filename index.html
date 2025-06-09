@@ -78,27 +78,111 @@
         <section id="figures" class="section">
             <h2>Atmosferische Metingen</h2>
             <div class="measurement-info">
-                <h3>Temperatuurprofielen in de atmosfeer</h3>
+                <h3>Uitgebreide Atmosferische Analyse</h3>
                 <p>
                     De getoonde visualisaties zijn gebaseerd op meteorologische sondemetingen (radiosondes) die worden uitgevoerd
                     door de Duitse Weerdienst (DWD) vanaf meetstation Norderney (10113). Deze metingen worden twee keer per dag uitgevoerd 
                     (om 00 UTC en 12 UTC) en geven een uitgebreid verticaal profiel van de atmosfeer tot ongeveer 30 km hoogte.
                 </p>
+                
+                <h4>Visualisatie-overzicht:</h4>
+                
+                <div class="plot-description">
+                    <h5>1. Temperatuurprofiel met Tropopauze</h5>
+                    <p>
+                        De hoofdvisualisatie toont temperatuurgegevens op verschillende hoogtes, waarbij de rode gestippelde lijn de
+                        tropopauze aangeeft - de belangrijke grenslaag tussen de troposfeer en de stratosfeer. De tropopauze wordt
+                        bepaald volgens de WMO-definitie als het laagste niveau waar de temperatuurgradiënt kleiner wordt dan -2°C/km.
+                    </p>
+                </div>
+
+                <div class="plot-description">
+                    <h5>2. Windsnelheid</h5>
+                    <p>
+                        Toont de windsnelheid op verschillende hoogtes. Hoge windsnelheden op grote hoogte duiden op de jet stream,
+                        die belangrijk is voor de luchtvaart en het transport van weersystemen. Windschering (snelle veranderingen
+                        in windsnelheid met de hoogte) is cruciaal voor onweersbui-ontwikkeling.
+                    </p>
+                </div>
+
+                <div class="plot-description">
+                    <h5>3. Windrichting</h5>
+                    <p>
+                        De windrichting op verschillende niveaus toont atmosferische circulatiepatronen. Veranderingen in windrichting
+                        met de hoogte (windschering) zijn belangrijk voor de ontwikkeling van convectieve systemen en tornadogenese.
+                    </p>
+                </div>
+
+                <div class="plot-description">
+                    <h5>4. Relatieve Vochtigheid</h5>
+                    <p>
+                        Geeft aan hoeveel waterdamp de lucht bevat relatief tot de maximale capaciteit bij die temperatuur.
+                        Hoge waarden (blauw) duiden op potentiële wolkvorming en neerslag, terwijl lage waarden droge luchtmassa's aangeven.
+                    </p>
+                </div>
+
+                <div class="plot-description">
+                    <h5>5. Mengverhouding (Mixing Ratio)</h5>
+                    <p>
+                        De absolute hoeveelheid waterdamp in de lucht (g water per kg droge lucht). Dit is een conservatieve eigenschap
+                        die niet verandert wanneer luchtpakketten stijgen of dalen, waardoor het nuttig is voor het traceren van luchtmassa's
+                        en het voorspellen van condensatie.
+                    </p>
+                </div>
+
+                <div class="plot-description">
+                    <h5>6. Potentiële Temperatuur</h5>
+                    <p>
+                        De temperatuur die een luchtpakket zou hebben als het adiabatisch naar 1000 hPa wordt gebracht.
+                        Constante waarden duiden op neutrale stabiliteit, toenemende waarden op stabiele condities,
+                        en afnemende waarden op onstabiele atmosferische condities.
+                    </p>
+                </div>
+
+                <div class="plot-description">
+                    <h5>7. K-Index (Stabiliteitsindex)</h5>
+                    <p>
+                        Een maat voor de atmosferische stabiliteit en het onweersbui potentieel:
+                        <ul>
+                            <li>&lt; 20: Zeer geringe kans op onweer</li>
+                            <li>20-25: Geringe kans op onweer</li>
+                            <li>26-30: Geïsoleerde onweersbuien mogelijk</li>
+                            <li>31-35: Verspreide onweersbuien waarschijnlijk</li>
+                            <li>&gt; 35: Uitgebreide onweersactiviteit</li>
+                        </ul>
+                    </p>
+                </div>
+
+                <div class="plot-description">
+                    <h5>8. CAPE en Lifted Index</h5>
+                    <p>
+                        <strong>CAPE</strong> (Convective Available Potential Energy) meet de energie beschikbaar voor convectie:
+                        <ul>
+                            <li>0-1000 J/kg: Zwakke convectie</li>
+                            <li>1000-2500 J/kg: Matige convectie</li>
+                            <li>2500-4000 J/kg: Sterke convectie</li>
+                            <li>&gt; 4000 J/kg: Extreme convectie</li>
+                        </ul>
+                        
+                        <strong>Lifted Index</strong> geeft atmosferische stabiliteit aan:
+                        <ul>
+                            <li>&gt; 2: Stabiel (onweer onwaarschijnlijk)</li>
+                            <li>0 tot 2: Matig stabiel</li>
+                            <li>-2 tot 0: Licht onstabiel</li>
+                            <li>&lt; -2: Onstabiel (onweer waarschijnlijk)</li>
+                        </ul>
+                    </p>
+                </div>
+                
                 <p>
-                    De visualisatie toont temperatuurgegevens op verschillende hoogtes, waarbij de rode gestippelde lijn de
-                    tropopauze aangeeft - de belangrijke grenslaag tussen de troposfeer en de stratosfeer. De tropopauze wordt
-                    bepaald volgens de WMO-definitie als het laagste niveau waar de temperatuurgradiënt kleiner wordt dan -2°C/km,
-                    en de gemiddelde gradiënt tussen dit niveau en alle hogere niveaus binnen 2 km niet kleiner is dan -2°C/km.
-                </p>
-                <p>
-                    Deze metingen zijn essentieel voor:
+                    <strong>Meteorologische toepassingen:</strong>
                 </p>
                 <ul>
-                    <li>Het bestuderen van atmosferische stabiliteit en de vorming van wolken en neerslag</li>
-                    <li>Het volgen van veranderingen in de tropopauzehoogte, wat kan wijzen op klimaatverandering</li>
-                    <li>Het onderzoeken van verticale luchtstromen en hun invloed op het weer</li>
-                    <li>Het valideren van weermodellen en satellietmetingen</li>
-                    <li>Het beter begrijpen van de verspreiding van luchtvervuiling en aerosolen in de atmosfeer</li>
+                    <li><strong>Weersvoorspelling:</strong> Identificatie van fronten, inversielagen en atmosferische stabiliteit</li>
+                    <li><strong>Onweersbui-voorspelling:</strong> CAPE, lifted index en windschering zijn cruciale parameters</li>
+                    <li><strong>Luchtvaart:</strong> Windschering detectie en turbulentie voorspelling</li>
+                    <li><strong>Klimaatstudie:</strong> Langetermijntrends in atmosferische structuur</li>
+                    <li><strong>Atmosferische chemie:</strong> Transport van pollutanten in verschillende lagen</li>
                 </ul>
                 <p>
                     De ruwe data wordt dagelijks verwerkt. De kleurschaal vertegenwoordigt de temperatuur in graden Celsius.
