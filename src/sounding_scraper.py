@@ -69,128 +69,12 @@ def fetch_single_observation(target_date, station_number=10113):
         print(f"Fout bij ophalen data voor {target_date.strftime('%Y-%m-%d %H:%M')}: {str(e)}")
         return None
 
-def detect_missing_timestamps(data):
+def scrape_sounding(station_number=10113):
     """
-    Detecteert ontbrekende tijdstempels in de data.
-    
-    Args:
-        data: Dictionary met sounding data
-    
-    Returns:
-        List van datetime objecten voor ontbrekende tijdstempels
-    """
-    if not data:
-        return []
-    
-    # Verzamel alle tijdstempels en sorteer ze
-    timestamps = []
-    for key in data.keys():
-        try:
-            obs_time = data[key]['station_info']['Observation time']
-            timestamp = datetime.strptime(obs_time, '%y%m%d/%H%M')
-            timestamps.append(timestamp)
-        except (KeyError, ValueError):
-            continue
-    
-    if len(timestamps) < 2:
-        return []
-    
-    timestamps.sort()
-    
-    # Vind gaps (ontbrekende 12-uurs metingen)
-    missing_timestamps = []
-    for i in range(len(timestamps) - 1):
-        current = timestamps[i]
-        next_ts = timestamps[i + 1]
-        
-        # Check of er een gap is van meer dan 12 uur maar minder dan 7 dagen
-        # (gaps groter dan 7 dagen zijn waarschijnlijk geen echte gaps maar legitieme missende data)
-        time_diff = (next_ts - current).total_seconds() / 3600  # in uren
-        
-        if 12 < time_diff <= 168:  # Meer dan 12 uur maar minder dan 1 week
-            # Genereer alle ontbrekende 12-uurs tijdstempels
-            gap_start = current + timedelta(hours=12)
-            while gap_start < next_ts:
-                missing_timestamps.append(gap_start)
-                gap_start += timedelta(hours=12)
-    
-    return missing_timestamps
-
-def fill_missing_timestamps(data, station_number=10113, max_attempts=3):
-    """
-    Vult ontbrekende tijdstempels op door data op te halen.
-    
-    Args:
-        data: Dictionary met sounding data
-        station_number: Station nummer
-        max_attempts: Maximum aantal pogingen per ontbrekende timestamp
-    
-    Returns:
-        Tuple (updated_data, aantal_opgehaald, aantal_mislukt)
-    """
-    missing = detect_missing_timestamps(data)
-    
-    if not missing:
-        print("Geen ontbrekende tijdstempels gevonden.")
-        return data, 0, 0
-    
-    print(f"\n{len(missing)} ontbrekende tijdstempels gedetecteerd.")
-    print("Poging om ontbrekende data op te halen...\n")
-    
-    fetched_count = 0
-    failed_count = 0
-    
-    for missing_ts in missing:
-        print(f"Ophalen data voor {missing_ts.strftime('%Y-%m-%d %H:%M')}...", end=' ')
-        
-        for attempt in range(max_attempts):
-            observation = fetch_single_observation(missing_ts, station_number)
-            
-            if observation:
-                # Controleer of de observation time overeenkomt met wat we verwachten
-                try:
-                    obs_time_str = observation['station_info']['Observation time']
-                    obs_timestamp = datetime.strptime(obs_time_str, '%y%m%d/%H%M')
-                    
-                    # Accepteer als het binnen 12 uur is van de verwachte tijd
-                    time_diff = abs((obs_timestamp - missing_ts).total_seconds() / 3600)
-                    if time_diff <= 12:
-                        data[observation['key']] = {
-                            'table': observation['table'],
-                            'station_info': observation['station_info']
-                        }
-                        fetched_count += 1
-                        print(f"✓ Opgehaald")
-                        break
-                    else:
-                        print(f"✗ Tijdstempel mismatch (verschil: {time_diff:.1f} uur)", end=' ')
-                except (KeyError, ValueError) as e:
-                    print(f"✗ Ongeldige observation time", end=' ')
-            else:
-                if attempt < max_attempts - 1:
-                    print(f"✗ Poging {attempt + 1}/{max_attempts} mislukt, opnieuw proberen...", end=' ')
-                else:
-                    print(f"✗ Mislukt na {max_attempts} pogingen")
-                    failed_count += 1
-        
-        # Kleine delay om server niet te overbelasten
-        time.sleep(0.5)
-    
-    # Herordenen op chronologische volgorde
-    sorted_keys = sorted(data.keys(), key=lambda k: datetime.strptime(data[k]['station_info']['Observation time'], '%y%m%d/%H%M'))
-    data = {key: data[key] for key in sorted_keys}
-    
-    print(f"\nResultaat: {fetched_count} ontbrekende metingen opgehaald, {failed_count} mislukt.")
-    
-    return data, fetched_count, failed_count
-
-def scrape_sounding(station_number=10113, fill_gaps=True):
-    """
-    Scrapt sounding data en vult ontbrekende tijdstempels op.
+    Scrapt nieuwe sounding data vanaf de laatste meting.
     
     Args:
         station_number: Station nummer (default 10113)
-        fill_gaps: Of ontbrekende tijdstempels automatisch moeten worden opgevuld
     """
     # Load the existing data if the file exists
     try:
@@ -206,18 +90,6 @@ def scrape_sounding(station_number=10113, fill_gaps=True):
     except Exception as e:
         print(f"Fout bij laden van data: {str(e)}")
         data = {}
-
-    # Vul eerst ontbrekende tijdstempels op als gevraagd
-    if fill_gaps and data:
-        print("\n" + "=" * 80)
-        print("CONTROLE OP ONTBREKENDE TIJDSTEMPELS")
-        print("=" * 80)
-        data, fetched, failed = fill_missing_timestamps(data, station_number)
-        if fetched > 0:
-            # Sla de bijgewerkte data op
-            with open('data/sounding.pkl', 'wb') as f:
-                pickle.dump(data, f)
-            print(f"Tussentijds opgeslagen: {fetched} nieuwe metingen toegevoegd.\n")
 
     # Base URL
     base_url = f"https://weather.uwyo.edu/cgi-bin/sounding?region=europe&TYPE=TEXT%3ALIST&YEAR={{year}}&MONTH={{month}}&FROM={{from_time}}&TO={{to_time}}&STNM={station_number}"
@@ -331,7 +203,173 @@ def scrape_sounding(station_number=10113, fill_gaps=True):
     
     print(f"Data opgeslagen: totaal {len(data)} entries.")
 
+def scrape_historical_data(start_date=None, end_date=None, station_number=10113, save_interval=100):
+    """
+    Haalt historische data op voor een periode. Haalt alleen ontbrekende tijdstempels op.
+    
+    Args:
+        start_date: Start datum (datetime object). Als None, start vanaf 2017-06-17
+        end_date: Eind datum (datetime object). Als None, gebruikt 2024-12-30
+        station_number: Station nummer
+        save_interval: Sla data op elke N metingen (om data niet te verliezen bij crashes)
+    """
+    # Laad bestaande data
+    try:
+        with open('data/sounding.pkl', 'rb') as f:
+            data = pickle.load(f)
+        print(f"Bestaande data geladen: {len(data)} entries")
+    except FileNotFoundError:
+        print("Geen bestaande data gevonden, start vanaf scratch.")
+        data = {}
+    
+    # Verzamel alle bestaande tijdstempels voor efficiënte checks
+    existing_timestamps = set()
+    for key in data.keys():
+        try:
+            obs_time = data[key]['station_info']['Observation time']
+            timestamp = datetime.strptime(obs_time, '%y%m%d/%H%M')
+            existing_timestamps.add(timestamp)
+        except:
+            pass
+    
+    # Bepaal start en eind datum
+    if start_date is None:
+        start_date = datetime(2015, 1, 1, 0, 0)
+    
+    if end_date is None:
+        end_date = datetime(2024, 12, 31, 0, 0)
+    
+    # Zorg dat start_date op 00 of 12 uur is
+    if start_date.hour not in [0, 12]:
+        start_date = start_date.replace(hour=0, minute=0)
+    
+    # Zorg dat end_date niet voorbij start_date is
+    if end_date <= start_date:
+        print(f"Eind datum ({end_date.strftime('%Y-%m-%d')}) is niet na start datum ({start_date.strftime('%Y-%m-%d')}).")
+        print("Geen historische data om op te halen.")
+        return
+    
+    print("\n" + "=" * 80)
+    print("HISTORISCHE BATCH UPDATE")
+    print("=" * 80)
+    print(f"Periode: {start_date.strftime('%Y-%m-%d %H:%M')} tot {end_date.strftime('%Y-%m-%d %H:%M')}")
+    
+    # Bereken totaal aantal te halen metingen
+    total_hours = (end_date - start_date).total_seconds() / 3600
+    total_measurements = int(total_hours / 12)
+    total_days = (end_date - start_date).days
+    
+    # Bereken hoeveel metingen er daadwerkelijk ontbreken
+    missing_count = 0
+    current_check = start_date
+    while current_check < end_date:
+        if current_check not in existing_timestamps:
+            missing_count += 1
+        current_check += timedelta(hours=12)
+    
+    print(f"Periode: {total_days} dagen ({total_measurements} metingen)")
+    print(f"Ontbrekende metingen: {missing_count} (al aanwezig: {total_measurements - missing_count})")
+    print(f"Opslaan elke {save_interval} metingen")
+    print(f"Geschatte tijd: ~{(missing_count * 0.3) / 60:.0f} minuten\n")
+    
+    current_date = start_date
+    fetched_count = 0
+    skipped_count = 0
+    failed_count = 0
+    
+    print("Start met ophalen historische data...\n")
+    start_time = datetime.now()
+    
+    while current_date < end_date:
+        # Skip als we deze meting al hebben
+        if current_date in existing_timestamps:
+            skipped_count += 1
+            if skipped_count % 100 == 0:
+                print(f"Skipped {skipped_count} bestaande metingen...")
+            current_date += timedelta(hours=12)
+            continue
+        
+        # Haal data op
+        observation = fetch_single_observation(current_date, station_number)
+        
+        if observation:
+            try:
+                obs_time_str = observation['station_info']['Observation time']
+                obs_timestamp = datetime.strptime(obs_time_str, '%y%m%d/%H%M')
+                
+                # Valideer dat de tijdstempel overeenkomt
+                time_diff = abs((obs_timestamp - current_date).total_seconds() / 3600)
+                if time_diff <= 12:
+                    data[observation['key']] = {
+                        'table': observation['table'],
+                        'station_info': observation['station_info']
+                    }
+                    fetched_count += 1
+                    
+                    # Print progress elke 50 metingen
+                    if fetched_count % 50 == 0:
+                        progress_pct = (fetched_count / missing_count * 100) if missing_count > 0 else 0
+                        elapsed_time = (datetime.now() - start_time).total_seconds() / 60
+                        rate = fetched_count / elapsed_time if elapsed_time > 0 else 0
+                        remaining = missing_count - fetched_count
+                        eta_minutes = remaining / rate if rate > 0 else 0
+                        print(f"[{datetime.now().strftime('%H:%M:%S')}] {fetched_count}/{missing_count} ({progress_pct:.1f}%) | "
+                              f"Datum: {current_date.strftime('%Y-%m-%d %H:%M')} | "
+                              f"{rate:.1f}/min | ETA: {eta_minutes:.0f} min")
+                    
+                    # Periodiek opslaan
+                    if fetched_count % save_interval == 0:
+                        sorted_keys = sorted(data.keys(), key=lambda k: datetime.strptime(data[k]['station_info']['Observation time'], '%y%m%d/%H%M'))
+                        data = {key: data[key] for key in sorted_keys}
+                        with open('data/sounding.pkl', 'wb') as f:
+                            pickle.dump(data, f)
+                        print(f"  → Opgeslagen: {len(data)} entries totaal")
+                else:
+                    failed_count += 1
+            except (KeyError, ValueError) as e:
+                failed_count += 1
+        else:
+            failed_count += 1
+        
+        # Rate limiting
+        time.sleep(0.3)
+        
+        # Volgende 12-uurs periode
+        current_date += timedelta(hours=12)
+    
+    # Final save
+    sorted_keys = sorted(data.keys(), key=lambda k: datetime.strptime(data[k]['station_info']['Observation time'], '%y%m%d/%H%M'))
+    data = {key: data[key] for key in sorted_keys}
+    
+    with open('data/sounding.pkl', 'wb') as f:
+        pickle.dump(data, f)
+    
+    # Bereken totale tijd
+    total_time = (datetime.now() - start_time).total_seconds() / 60
+    
+    print("\n" + "=" * 80)
+    print("HISTORISCHE BATCH UPDATE VOLTOOID")
+    print("=" * 80)
+    print(f"Nieuw opgehaald: {fetched_count} metingen")
+    print(f"Overgeslagen (al aanwezig): {skipped_count} metingen")
+    print(f"Mislukt: {failed_count} metingen")
+    print(f"Totale tijd: {total_time:.1f} minuten")
+    print(f"Totaal entries in database: {len(data)}")
+    if data:
+        sorted_keys = sorted(data.keys(), key=lambda k: datetime.strptime(data[k]['station_info']['Observation time'], '%y%m%d/%H%M'))
+        first_key = sorted_keys[0]
+        last_key = sorted_keys[-1]
+        print(f"Eerste record: {data[first_key]['station_info']['Observation time']}")
+        print(f"Laatste record: {data[last_key]['station_info']['Observation time']}")
+    print("=" * 80)
+
 if __name__ == '__main__':
-    scrape_sounding()
+    import sys
+    
+    # Check of historische batch mode wordt gevraagd
+    if '--historical' in sys.argv or '-h' in sys.argv:
+        scrape_historical_data()
+    else:
+        scrape_sounding()
 
 # %%
