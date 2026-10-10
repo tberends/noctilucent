@@ -1,402 +1,332 @@
-import pandas as pd
+"""Export the sounding archive as compact files for the static site."""
+
+import json
+import warnings
+from pathlib import Path
+
 import numpy as np
-from datetime import datetime
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import pandas as pd
 
 from src.sounding_store import load_profiles, load_station
 
+WEB_DIR = Path("app/data")
+HEIGHT_COUNT = 80
+RECENT_DAYS = 60
+ARCHIVE_COLUMNS = 1200
+FIELDS = ["TEMP", "SKNT", "DRCT", "RELH", "MIXR", "THTA"]
+
+
 def find_tropopause(heights, temps):
-    """
-    Bepaalt de hoogte van de tropopauze volgens WMO-definitie:
-    - Het laagste niveau waar de temperatuurgradiënt kleiner wordt dan -2°C/km
-    - De gemiddelde gradiënt tussen dit niveau en alle hogere niveaus binnen 2 km
-      is niet kleiner dan -2°C/km
-    """
+    """Lowest WMO tropopause: lapse rate above -2 C/km, and the same over the next 2 km."""
     if len(heights) < 2 or len(temps) < 2:
         return None
-    
-    # Sorteer de data op hoogte (voor het geval dat)
+
     sort_idx = np.argsort(heights)
     heights = heights[sort_idx]
     temps = temps[sort_idx]
-    
-    # Bereken temperatuurgradiënt in °C/km
-    gradients = np.zeros(len(heights)-1)
-    for i in range(len(heights)-1):
-        height_diff = (heights[i+1] - heights[i]) / 1000.0  # conversie naar km
-        if height_diff > 0:  # voorkom delen door nul
-            gradients[i] = (temps[i+1] - temps[i]) / height_diff
-    
-    # Zoek het laagste niveau waar de gradiënt boven -2°C/km komt
+
+    gradients = np.zeros(len(heights) - 1)
+    for i in range(len(heights) - 1):
+        height_diff = (heights[i + 1] - heights[i]) / 1000.0
+        if height_diff > 0:
+            gradients[i] = (temps[i + 1] - temps[i]) / height_diff
+
     for i in range(len(gradients)):
-        if heights[i] > 5000 and gradients[i] > -2.0:  # Begin zoeken boven 5 km
-            # Controleer of de gemiddelde gradiënt in de volgende 2 km ook boven -2°C/km blijft
-            next_levels = [j for j in range(i+1, len(heights)) if heights[j] < heights[i] + 2000]
-            
+        if heights[i] > 5000 and gradients[i] > -2.0:
+            next_levels = [j for j in range(i + 1, len(heights)) if heights[j] < heights[i] + 2000]
             if len(next_levels) > 0:
-                mean_gradient = np.mean([gradients[j] for j in range(i, min(i+len(next_levels), len(gradients)))])
+                mean_gradient = np.mean(
+                    [gradients[j] for j in range(i, min(i + len(next_levels), len(gradients)))]
+                )
                 if mean_gradient > -2.0:
-                    return heights[i]
-    
+                    return float(heights[i])
     return None
 
+
 def _interp_profile(heights, values, unique_heights):
-    """Interpolate one sounding. Heights are sorted so a folded profile still plots."""
-    order = np.argsort(heights, kind="mergesort")
-    xp = heights[order]
-    fp = values[order]
+    """Interpolate one sounding onto the height grid. Folded profiles are sorted first."""
+    mask = np.isfinite(heights) & np.isfinite(values)
+    if mask.sum() < 2:
+        return np.full(len(unique_heights), np.nan)
+    order = np.argsort(heights[mask], kind="mergesort")
+    xp = heights[mask][order]
+    fp = values[mask][order]
     unique_xp, unique_index = np.unique(xp, return_index=True)
     if len(unique_xp) < 2:
         return np.full(len(unique_heights), np.nan)
     return np.interp(unique_heights, unique_xp, fp[unique_index])
 
 
-def create_wind_grid(time_arr, height_arr, wind_dir, wind_speed):
-    """Creëer grids voor windrichting en windsnelheid"""
-    unique_times = np.unique(time_arr)
-    unique_heights = np.linspace(min(height_arr), max(height_arr), 100)
-    
-    wind_dir_grid = np.zeros((len(unique_heights), len(unique_times)))
-    wind_speed_grid = np.zeros((len(unique_heights), len(unique_times)))
-    
-    for i, t in enumerate(unique_times):
-        mask = time_arr == t
-        if np.any(mask):
-            wind_dir_grid[:, i] = _interp_profile(height_arr[mask], wind_dir[mask], unique_heights)
-            wind_speed_grid[:, i] = _interp_profile(height_arr[mask], wind_speed[mask], unique_heights)
-    
-    return unique_times, unique_heights, wind_dir_grid, wind_speed_grid
-
-def create_humidity_grid(time_arr, height_arr, rel_humidity, mix_ratio):
-    """Creëer grids voor vochtigheidsparameters"""
-    unique_times = np.unique(time_arr)
-    unique_heights = np.linspace(min(height_arr), max(height_arr), 100)
-    
-    rel_hum_grid = np.zeros((len(unique_heights), len(unique_times)))
-    mix_ratio_grid = np.zeros((len(unique_heights), len(unique_times)))
-    
-    for i, t in enumerate(unique_times):
-        mask = time_arr == t
-        if np.any(mask):
-            rel_hum_grid[:, i] = _interp_profile(height_arr[mask], rel_humidity[mask], unique_heights)
-            mix_ratio_grid[:, i] = _interp_profile(height_arr[mask], mix_ratio[mask], unique_heights)
-    
-    return unique_times, unique_heights, rel_hum_grid, mix_ratio_grid
-
-def _index_series(station, column):
-    """Times and values for one index. Missing values stay out of the series."""
-    if column not in station.columns:
-        return np.array([], dtype="datetime64[ns]"), np.array([], dtype=float)
-    values = pd.to_numeric(station[column], errors="coerce")
-    mask = values.notna().to_numpy()
-    times = station.loc[mask, "time"].to_numpy(dtype="datetime64[ns]")
-    return times, values.to_numpy(dtype=float)[mask]
+def _interp_direction(heights, directions, unique_heights):
+    """Interpolate wind direction through sine and cosine so 359 and 1 stay neighbours."""
+    mask = np.isfinite(heights) & np.isfinite(directions)
+    if mask.sum() < 2:
+        return np.full(len(unique_heights), np.nan)
+    radians = np.deg2rad(directions[mask])
+    sine = _interp_profile(heights[mask], np.sin(radians), unique_heights)
+    cosine = _interp_profile(heights[mask], np.cos(radians), unique_heights)
+    angle = np.rad2deg(np.arctan2(sine, cosine)) % 360
+    angle[~np.isfinite(sine) | ~np.isfinite(cosine)] = np.nan
+    return angle
 
 
-def plot_sounding():
+def _dewpoint_c(temp_c, relative_humidity):
+    """Magnus dewpoint. Returns None when humidity is missing or not positive."""
+    if not np.isfinite(temp_c) or not np.isfinite(relative_humidity) or relative_humidity <= 0:
+        return None
+    humidity = min(float(relative_humidity), 100.0)
+    a, b = 17.625, 243.04
+    gamma = np.log(humidity / 100.0) + (a * temp_c) / (b + temp_c)
+    return float((b * gamma) / (a - gamma))
+
+
+def _epoch_ms(stamp):
+    return int(np.datetime64(stamp, "ms").astype(np.int64))
+
+
+def _iso_z(stamp):
+    return pd.Timestamp(stamp).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _finite_or_none(value, digits):
+    if value is None or not np.isfinite(value):
+        return None
+    return round(float(value), digits)
+
+
+def _series_list(values, digits):
+    return [_finite_or_none(value, digits) for value in values]
+
+
+def _build_grids(frame, times, heights):
+    n_h = len(heights)
+    n_t = len(times)
+    grids = {name: np.full((n_h, n_t), np.nan, dtype=np.float32) for name in FIELDS}
+    tropopause = np.full(n_t, np.nan, dtype=np.float64)
+    index = {np.datetime64(stamp, "ns"): i for i, stamp in enumerate(times)}
+
+    for stamp, group in frame.groupby("time", sort=False):
+        column = index.get(np.datetime64(stamp, "ns"))
+        if column is None:
+            continue
+        level_heights = group["HGHT"].to_numpy(dtype=float)
+        temperature = group["TEMP"].to_numpy(dtype=float)
+        grids["TEMP"][:, column] = _interp_profile(level_heights, temperature, heights)
+        grids["SKNT"][:, column] = _interp_profile(
+            level_heights, group["SKNT"].to_numpy(dtype=float), heights
+        )
+        grids["DRCT"][:, column] = _interp_direction(
+            level_heights, group["DRCT"].to_numpy(dtype=float), heights
+        )
+        grids["RELH"][:, column] = _interp_profile(
+            level_heights, group["RELH"].to_numpy(dtype=float), heights
+        )
+        grids["MIXR"][:, column] = _interp_profile(
+            level_heights, group["MIXR"].to_numpy(dtype=float), heights
+        )
+        grids["THTA"][:, column] = _interp_profile(
+            level_heights, group["THTA"].to_numpy(dtype=float), heights
+        )
+        finite = np.isfinite(level_heights) & np.isfinite(temperature)
+        found = find_tropopause(level_heights[finite], temperature[finite])
+        if found is not None:
+            tropopause[column] = found
+    return grids, tropopause
+
+
+def _bin_edges(count, bins):
+    edges = np.linspace(0, count, bins + 1).astype(int)
+    pairs = []
+    for start, end in zip(edges[:-1], edges[1:]):
+        if end > start:
+            pairs.append((int(start), int(end)))
+    return pairs
+
+
+def _nanmean_bins(values, edges):
+    columns = []
+    for start, end in edges:
+        with np.errstate(invalid="ignore", divide="ignore"):
+            block = values[:, start:end]
+            if not np.isfinite(block).any():
+                columns.append(np.full(values.shape[0], np.nan))
+            else:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", RuntimeWarning)
+                    columns.append(np.nanmean(block, axis=1))
+    return np.stack(columns, axis=1).astype(np.float32)
+
+
+def _circular_mean_bins(degrees, edges):
+    columns = []
+    for start, end in edges:
+        block = degrees[:, start:end]
+        if not np.isfinite(block).any():
+            columns.append(np.full(degrees.shape[0], np.nan))
+            continue
+        radians = np.deg2rad(block)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            sine = np.nanmean(np.sin(radians), axis=1)
+            cosine = np.nanmean(np.cos(radians), axis=1)
+        angle = np.rad2deg(np.arctan2(sine, cosine)) % 360
+        angle[~np.isfinite(sine) | ~np.isfinite(cosine)] = np.nan
+        columns.append(angle)
+    return np.stack(columns, axis=1).astype(np.float32)
+
+
+def _median_bins(values, edges):
+    columns = []
+    for start, end in edges:
+        block = values[start:end]
+        if not np.isfinite(block).any():
+            columns.append(np.nan)
+        else:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                columns.append(np.nanmedian(block))
+    return np.asarray(columns, dtype=np.float64)
+
+
+def _downsample(times, grids, tropopause, limit):
+    count = len(times)
+    if count <= limit:
+        return times, grids, tropopause
+    edges = _bin_edges(count, limit)
+    reduced = {}
+    for name, values in grids.items():
+        if name == "DRCT":
+            reduced[name] = _circular_mean_bins(values, edges)
+        else:
+            reduced[name] = _nanmean_bins(values, edges)
+    ends = [times[end - 1] for start, end in edges]
+    return np.asarray(ends, dtype="datetime64[ns]"), reduced, _median_bins(tropopause, edges)
+
+
+def _write_grid(path, grids):
+    parts = [np.ascontiguousarray(grids[name], dtype="<f4").ravel(order="C") for name in FIELDS]
+    blob = np.concatenate(parts)
+    path.write_bytes(blob.tobytes())
+    return blob.nbytes
+
+
+def _index_payload(station):
+    ordered = station.sort_values("time")
+    times = ordered["time"].to_numpy(dtype="datetime64[ns]")
+
+    def column(name, digits):
+        if name not in ordered.columns:
+            return [None] * len(ordered)
+        values = pd.to_numeric(ordered[name], errors="coerce").to_numpy(dtype=float)
+        return _series_list(values, digits)
+
+    return {
+        "times": [_epoch_ms(stamp) for stamp in times],
+        "k": column("K index", 1),
+        "cape": column("Convective Available Potential Energy", 0),
+        "mucape": column("Most Unstable CAPE", 0),
+        "lifted": column("Lifted index", 1),
+        "virtualLifted": column("Virtual Lifted Index", 1),
+    }
+
+
+def _latest_summary(times, grids, tropopause, station):
+    stamp = times[-1]
+    temp = float(grids["TEMP"][0, -1])
+    humidity = float(grids["RELH"][0, -1])
+    row = station.loc[station["time"] == pd.Timestamp(stamp)]
+    k_index = None
+    mucape = None
+    if not row.empty:
+        if "K index" in row.columns:
+            k_index = _finite_or_none(pd.to_numeric(row["K index"], errors="coerce").iloc[-1], 1)
+        if "Most Unstable CAPE" in row.columns:
+            mucape = _finite_or_none(
+                pd.to_numeric(row["Most Unstable CAPE"], errors="coerce").iloc[-1], 0
+            )
+    return {
+        "time": _iso_z(stamp),
+        "temp": _finite_or_none(temp, 1),
+        "dewpoint": _finite_or_none(_dewpoint_c(temp, humidity), 1),
+        "windSpeed": _finite_or_none(grids["SKNT"][0, -1], 0),
+        "windDir": _finite_or_none(grids["DRCT"][0, -1], 0),
+        "tropopause": _finite_or_none(tropopause[-1], 0),
+        "kIndex": k_index,
+        "mucape": mucape,
+    }
+
+
+def _pack_view(times, grids, tropopause):
+    return {
+        "times": [_iso_z(stamp) for stamp in times],
+        "tropopause": _series_list(tropopause, 0),
+    }
+
+
+def export_site():
+    """Write app/data/meta.json, recent.bin and archive.bin from the Parquet archive."""
     profiles = load_profiles()
     station = load_station()
     if profiles.empty:
         raise FileNotFoundError("Geen profieldata in data/profiles.parquet")
 
     valid = profiles["HGHT"].notna() & profiles["TEMP"].notna()
-    frame = profiles.loc[valid]
-    time_arr = frame["time"].to_numpy(dtype="datetime64[ns]")
-    height_arr = frame["HGHT"].to_numpy(dtype=float)
-    temp_arr = frame["TEMP"].to_numpy(dtype=float)
-    wind_dir_arr = frame["DRCT"].fillna(0).to_numpy(dtype=float)
-    wind_speed_arr = frame["SKNT"].fillna(0).to_numpy(dtype=float)
-    rel_hum_arr = frame["RELH"].fillna(0).to_numpy(dtype=float)
-    mix_ratio_arr = frame["MIXR"].fillna(0).to_numpy(dtype=float)
-    pot_temp_arr = frame["THTA"].fillna(frame["TEMP"]).to_numpy(dtype=float)
+    frame = profiles.loc[valid].sort_values(["time", "HGHT"])
+    times = np.sort(frame["time"].unique().astype("datetime64[ns]"))
+    observed = frame.loc[frame["HGHT"] >= 0, "HGHT"].to_numpy(dtype=float)
+    low = float(np.nanmin(observed))
+    high = float(np.nanmax(observed))
+    heights = np.linspace(low, high, HEIGHT_COUNT)
 
-    k_times, k_index_values = _index_series(station, "K index")
-    cape_times, cape_values = _index_series(station, "Convective Available Potential Energy")
-    mucape_times, mucape_values = _index_series(station, "Most Unstable CAPE")
-    lifted_times, lifted_index_values = _index_series(station, "Lifted index")
-    virtual_times, virtual_lifted_values = _index_series(station, "Virtual Lifted Index")
+    grids, tropopause = _build_grids(frame, times, heights)
+    cutoff = times[-1] - np.timedelta64(RECENT_DAYS, "D")
+    recent_index = np.flatnonzero(times >= cutoff)
+    if len(recent_index) == 0:
+        recent_index = np.arange(len(times))
+    recent_slice = slice(int(recent_index[0]), int(recent_index[-1]) + 1)
+    recent_times = times[recent_slice]
+    recent_grids = {name: values[:, recent_slice] for name, values in grids.items()}
+    recent_tropopause = tropopause[recent_slice]
 
-    # Create regular grid voor temperatuur
-    unique_times = np.unique(time_arr)
-    unique_heights = np.linspace(min(height_arr), max(height_arr), 100)
-    temp_grid = np.zeros((len(unique_heights), len(unique_times)))
-
-    # Interpolate temperature data onto regular grid
-    for i, t in enumerate(unique_times):
-        mask = time_arr == t
-        if np.any(mask):
-            temp_grid[:, i] = _interp_profile(height_arr[mask], temp_arr[mask], unique_heights)
-
-    # Bereken tropopauze hoogte voor elke tijdstap
-    tropopause_heights = []
-    tropopause_times = []
-    
-    for i, t in enumerate(unique_times):
-        mask = time_arr == t
-        if np.sum(mask) > 10:
-            heights_at_t = height_arr[mask]
-            temps_at_t = temp_arr[mask]
-            tropopause = find_tropopause(heights_at_t, temps_at_t)
-            if tropopause is not None:
-                tropopause_heights.append(tropopause)
-                tropopause_times.append(t)
-
-    # Create wind grids
-    _, _, wind_dir_grid, wind_speed_grid = create_wind_grid(time_arr, height_arr, wind_dir_arr, wind_speed_arr)
-    
-    # Create humidity grids
-    _, _, rel_hum_grid, mix_ratio_grid = create_humidity_grid(time_arr, height_arr, rel_hum_arr, mix_ratio_arr)
-    
-    # Create potential temperature grid
-    pot_temp_grid = np.zeros((len(unique_heights), len(unique_times)))
-    for i, t in enumerate(unique_times):
-        mask = time_arr == t
-        if np.any(mask):
-            pot_temp_grid[:, i] = _interp_profile(height_arr[mask], pot_temp_arr[mask], unique_heights)
-
-    # Create subplots with multiple rows
-    fig = make_subplots(
-        rows=8, cols=1,
-        subplot_titles=['Temperatuurprofiel met Tropopauze', 'Windsnelheid',
-                       'Windrichting', 'Relatieve Vochtigheid (%)',
-                       'Mengverhouding (g/kg)', 'Potentiële Temperatuur (K)',
-                       'K-Index (Stabiliteitsindex)', 'CAPE en Lifted Index'],
-        specs=[[{"secondary_y": False}],
-               [{"secondary_y": False}],
-               [{"secondary_y": False}],
-               [{"secondary_y": False}],
-               [{"secondary_y": False}],
-               [{"secondary_y": False}],
-               [{"secondary_y": False}],
-               [{"secondary_y": True}]],
-        vertical_spacing=0.04,
-        shared_xaxes=True,
-        row_heights=[0.16, 0.16, 0.16, 0.16, 0.16, 0.16, 0.08, 0.08]  # Laatste twee plots kleiner
+    archive_times, archive_grids, archive_tropopause = _downsample(
+        times, grids, tropopause, ARCHIVE_COLUMNS
     )
 
-    # 1. Temperatuurprofiel met tropopauze (originele plot)
-    fig.add_trace(
-        go.Heatmap(
-            x=unique_times,
-            y=unique_heights,
-            z=temp_grid,
-            colorscale='thermal',
-            colorbar=dict(title='°C', x=1.01, len=0.14, y=0.93),
-            showscale=True
-        ),
-        row=1, col=1
-    )
+    WEB_DIR.mkdir(parents=True, exist_ok=True)
+    recent_bytes = _write_grid(WEB_DIR / "recent.bin", recent_grids)
+    archive_bytes = _write_grid(WEB_DIR / "archive.bin", archive_grids)
 
-    if tropopause_heights and tropopause_times:
-        fig.add_trace(
-            go.Scatter(
-                x=tropopause_times,
-                y=tropopause_heights,
-                mode='lines',
-                line=dict(color='#FF0000', width=2, dash='dash'),
-                name='Tropopauze',
-                showlegend=True
-            ),
-            row=1, col=1
-        )
-
-    # 2. Windsnelheid
-    fig.add_trace(
-        go.Heatmap(
-            x=unique_times,
-            y=unique_heights,
-            z=wind_speed_grid,
-            colorscale='Viridis',
-            colorbar=dict(title='knots', x=1.01, len=0.14, y=0.79),
-            showscale=True
-        ),
-        row=2, col=1
-    )
-
-    # 3. Windrichting
-    fig.add_trace(
-        go.Heatmap(
-            x=unique_times,
-            y=unique_heights,
-            z=wind_dir_grid,
-            colorscale='HSV',
-            colorbar=dict(title='graden', x=1.01, len=0.14, y=0.65),
-            showscale=True
-        ),
-        row=3, col=1
-    )
-
-    # 4. Relatieve vochtigheid
-    fig.add_trace(
-        go.Heatmap(
-            x=unique_times,
-            y=unique_heights,
-            z=rel_hum_grid,
-            colorscale='Blues',
-            colorbar=dict(title='%', x=1.01, len=0.14, y=0.51),
-            showscale=True
-        ),
-        row=4, col=1
-    )
-
-    # 5. Mengverhouding
-    fig.add_trace(
-        go.Heatmap(
-            x=unique_times,
-            y=unique_heights,
-            z=mix_ratio_grid,
-            colorscale='YlGnBu',
-            colorbar=dict(title='g/kg', x=1.01, len=0.14, y=0.37),
-            showscale=True
-        ),
-        row=5, col=1
-    )
-
-    # 6. Potentiële temperatuur
-    fig.add_trace(
-        go.Heatmap(
-            x=unique_times,
-            y=unique_heights,
-            z=pot_temp_grid,
-            colorscale='plasma',
-            colorbar=dict(title='K', x=1.01, len=0.14, y=0.23),
-            showscale=True
-        ),
-        row=6, col=1
-    )
-
-    # 7. K-Index. Historical and new FM35 values share this definition.
-    if len(k_times):
-        fig.add_trace(
-            go.Scatter(
-                x=k_times,
-                y=k_index_values,
-                mode='lines',
-                line=dict(color='orange', width=1.5),
-                name='K-Index',
-                showlegend=True
-            ),
-            row=7, col=1
-        )
-
-    # 8. Classic CAPE and lifted index stop where the new server stops publishing them.
-    # MUCAPE and the virtual lifted index continue as their own series.
-    if len(cape_times):
-        fig.add_trace(
-            go.Scatter(
-                x=cape_times,
-                y=cape_values,
-                mode='lines',
-                line=dict(color='red', width=1.5),
-                name='CAPE',
-                showlegend=True
-            ),
-            row=8, col=1
-        )
-
-    if len(mucape_times):
-        fig.add_trace(
-            go.Scatter(
-                x=mucape_times,
-                y=mucape_values,
-                mode='lines',
-                line=dict(color='darkred', width=1.5, dash='dot'),
-                name='MUCAPE',
-                showlegend=True
-            ),
-            row=8, col=1
-        )
-
-    if len(lifted_times):
-        fig.add_trace(
-            go.Scatter(
-                x=lifted_times,
-                y=lifted_index_values,
-                mode='lines',
-                line=dict(color='blue', width=1.5),
-                name='Lifted Index',
-                showlegend=True
-            ),
-            row=8, col=1, secondary_y=True
-        )
-
-    if len(virtual_times):
-        fig.add_trace(
-            go.Scatter(
-                x=virtual_times,
-                y=virtual_lifted_values,
-                mode='lines',
-                line=dict(color='royalblue', width=1.5, dash='dot'),
-                name='Virtual Lifted Index',
-                showlegend=True
-            ),
-            row=8, col=1, secondary_y=True
-        )
-
+    station_number = "10113"
     if "Station number" in station.columns and station["Station number"].notna().any():
         station_number = str(station["Station number"].dropna().iloc[0])
-    else:
-        station_number = "10113"
-    
-    # Bepaal de laatste werkelijke datum en vandaag
-    today = np.datetime64(datetime.now().replace(microsecond=0))
-    last_measurement = unique_times.max() if len(unique_times) else today
-    end_date = min(today, last_measurement)
-    
-    fig.update_layout(
-        title=dict(
-            text=f'Uitgebreide Atmosferische Analyse - Station {station_number}',
-            font=dict(size=20, weight='bold'),
-            x=0.5
-        ),
-        height=2200,  # Aangepaste hoogte
-        showlegend=True,
-        legend=dict(
-            orientation="h",
-            yanchor="top",
-            y=0.99,
-            xanchor="left",
-            x=0.01,
-            bgcolor="rgba(255,255,255,0.8)"
-        ),
-        margin=dict(r=120),  # Extra ruimte voor colorbars
-        xaxis=dict(range=[min(unique_times), end_date])  # Beperk x-as tot vandaag
+
+    meta = {
+        "station": station_number,
+        "place": "Norderney",
+        "heights": [round(float(height), 1) for height in heights],
+        "fields": FIELDS,
+        "latest": _latest_summary(recent_times, recent_grids, recent_tropopause, station),
+        "recent": {
+            "file": "app/data/recent.bin",
+            **_pack_view(recent_times, recent_grids, recent_tropopause),
+        },
+        "archive": {
+            "file": "app/data/archive.bin",
+            **_pack_view(archive_times, archive_grids, archive_tropopause),
+        },
+        "indices": _index_payload(station),
+    }
+    (WEB_DIR / "meta.json").write_text(json.dumps(meta, separators=(",", ":")), encoding="utf-8")
+    print(
+        f"Export: recent {len(recent_times)} oplatingen ({recent_bytes} bytes), "
+        f"archief {len(archive_times)} kolommen ({archive_bytes} bytes)."
     )
 
-    # Update x-axes - voeg range selector toe aan de bovenste plot
-    fig.update_xaxes(
-        rangeselector=dict(
-            buttons=list([
-                dict(count=7, label="7d", step="day", stepmode="backward"),
-                dict(count=1, label="1m", step="month", stepmode="backward"),
-                dict(count=3, label="3m", step="month", stepmode="backward"),
-                dict(label="Alles", step="all")
-            ]),
-            yanchor="top",
-            y=1.02,
-            xanchor="left",
-            x=0.01
-        ),
-        type="date",
-        range=[min(unique_times), end_date],  # Beperk ook hier de range
-        row=1, col=1
-    )
 
-    # Voeg alleen datum label toe aan onderste plot
-    fig.update_xaxes(title_text='Datum', row=8, col=1)
+def plot_sounding():
+    """Backward-compatible name used by main.py."""
+    export_site()
 
-    # Update y-axes labels voor hoogte plots (eerste 6 rijen)
-    for row in range(1, 7):
-        fig.update_yaxes(title_text='Hoogte (m)', row=row, col=1)
 
-    # Y-axis labels voor stabiliteitsindices
-    fig.update_yaxes(title_text='K-Index', row=7, col=1)
-    fig.update_yaxes(title_text='CAPE (J/kg)', row=8, col=1)
-    fig.update_yaxes(title_text='Lifted Index', row=8, col=1, secondary_y=True)
-
-    # Save the plot to a file in folder visualizations
-    fig.write_html('app/visualizations/sounding_plot.html')
-
-if __name__ == '__main__':
-    plot_sounding()
+if __name__ == "__main__":
+    export_site()

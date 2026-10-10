@@ -4,14 +4,13 @@ Dit script verzamelt en visualiseert sounding data.
 
 Het script maakt gebruik van twee hoofdmodules:
 - sounding_scraper: Voor het ophalen van de sounding data
-- sounding_plot: Voor het visualiseren van de sounding data
+- sounding_plot: Voor het exporteren van de statische meetpagina
 """
 
 import sys
-from datetime import datetime, timedelta
 import logging
 from src.sounding_scraper import scrape_sounding
-from src.sounding_plot import plot_sounding
+from src.sounding_plot import export_site
 
 # Logging configuratie
 logging.basicConfig(
@@ -22,14 +21,14 @@ logger = logging.getLogger(__name__)
 
 def main():
     """
-    Hoofdfunctie die het scrapen en plotten van sounding data coördineert.
+    Hoofdfunctie die het scrapen en exporteren van sounding data coördineert.
     """
     try:
         logger.info("Start met het verzamelen van sounding data...")
         scrape_sounding()
-        
-        logger.info("Start met het plotten van sounding data...")
-        plot_sounding()
+
+        logger.info("Start met het exporteren van de meetpagina...")
+        export_site()
         
         logger.info("Script succesvol uitgevoerd!")
         return 0

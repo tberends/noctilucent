@@ -3,7 +3,6 @@
 Een geavanceerde webtool voor het visualiseren en analyseren van meteorologische sondemetingen (radiosondes) van het Duitse Weerstation Norderney (10113).
 
 ![Python](https://img.shields.io/badge/Python-3.7+-blue.svg)
-![Plotly](https://img.shields.io/badge/Plotly-Interactive-orange.svg)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ## 📋 Overzicht
@@ -18,10 +17,10 @@ Noctilucent biedt een uitgebreide atmosferische analyse door middel van interact
 ## ✨ Features
 
 ### 🎯 **Uitgebreide Visualisaties**
-- **8 gespecialiseerde plots** in verticale opstelling
-- **Gelijktijdige zoom** over alle grafieken
-- **Interactieve tijdnavigatie** met range selectors
-- **Individuele kleurschalen** per parameter
+- **Zes kaarten** met een gedeelde tijdlijn
+- **Periodekeuze** van 14 dagen tot het hele archief
+- **Verticaal profiel** van de gekozen oplating
+- **Eigen kleurschaal** per grootheid
 
 ### 🌡️ **Meteorologische Parameters**
 1. **Temperatuurprofiel** - Met automatische tropopauze detectie (WMO-definitie)
@@ -47,88 +46,34 @@ Noctilucent biedt een uitgebreide atmosferische analyse door middel van interact
 Python 3.7+
 pandas
 numpy
-plotly
-pickle
+pyarrow
 ```
 
 ### Setup
 1. **Clone de repository:**
 ```bash
-git clone https://github.com/username/noctilucent.git
+git clone https://github.com/tberends/noctilucent.git
 cd noctilucent
 ```
 
 2. **Installeer dependencies:**
 ```bash
-pip install pandas numpy plotly
+pip install pandas numpy pyarrow
 ```
 
-3. **Zorg voor sounding data:**
-Plaats je sounding data in `data/sounding.pkl` formaat
+3. **Archief**
+De metingen staan in `data/profiles.parquet` en `data/station.parquet`.
 
 ## 📊 Gebruik
 
-### Visualisaties Genereren
+### Paginabestanden genereren
 ```bash
 python src/sounding_plot.py
 ```
+Dit schrijft `app/data/meta.json`, `app/data/recent.bin` en `app/data/archive.bin`. De pagina tekent die bestanden zelf.
 
-### Website Starten
-```bash
-# Open index.html in je browser
-open index.html
-```
-
-### Data Formaat
-De sounding data verwacht een pickle-bestand met de volgende structuur:
-```python
-{
-    'key': {
-        'station_info': {
-            'Station number': '10113',
-            'Observation time': 'YYMMDD/HHMM',
-            'CAPE': float,
-            'Lifted index': float,
-            'K index': float,
-            # ... andere indices
-        },
-        'table': pandas.DataFrame({
-            'PRES': [],    # Druk (hPa)
-            'HGHT': [],    # Hoogte (m)
-            'TEMP': [],    # Temperatuur (°C)
-            'DWPT': [],    # Dauwpunt (°C)
-            'RELH': [],    # Relatieve vochtigheid (%)
-            'MIXR': [],    # Mengverhouding (g/kg)
-            'DRCT': [],    # Windrichting (graden)
-            'SKNT': [],    # Windsnelheid (knots)
-            'THTA': [],    # Potentiële temperatuur (K)
-            'THTE': [],    # Equivalent potentiële temperatuur (K)
-            'THTV': []     # Virtuele potentiële temperatuur (K)
-        })
-    }
-}
-```
-
-## 🎨 Customization
-
-### Kleurschema's Aanpassen
-```python
-# In src/sounding_plot.py
-colorscales = {
-    'temperature': 'thermal',
-    'wind_speed': 'Viridis', 
-    'wind_direction': 'HSV',
-    'humidity': 'Blues',
-    'mixing_ratio': 'YlGnBu',
-    'potential_temp': 'plasma'
-}
-```
-
-### Plot Hoogtes Wijzigen
-```python
-# Aanpassen in make_subplots
-row_heights=[0.16, 0.16, 0.16, 0.16, 0.16, 0.16, 0.08, 0.08]
-```
+### Website
+`index.html` is de GitHub Pages-ingang. Paden zijn relatief, zodat de site zowel op de root als onder `/noctilucent/` werkt.
 
 ## 📁 Project Structuur
 
@@ -136,20 +81,21 @@ row_heights=[0.16, 0.16, 0.16, 0.16, 0.16, 0.16, 0.08, 0.08]
 noctilucent/
 │
 ├── src/
-│   └── sounding_plot.py        # Hoofdvisualisatie script
+│   └── sounding_plot.py        # Export naar de statische pagina
 │
 ├── app/
+│   ├── data/                  # meta.json, recent.bin, archive.bin
 │   ├── styles/
-│   │   └── style.css          # Website styling
-│   ├── visualizations/
-│   │   └── sounding_plot.html # Gegenereerde plots
-│   └── images/                # Website afbeeldingen
+│   │   └── style.css
+│   ├── scripts/
+│   └── images/
 │
 ├── data/
-│   └── sounding.pkl           # Sounding meetdata
+│   ├── profiles.parquet
+│   └── station.parquet
 │
-├── index.html                 # Hoofdwebsite
-└── README.md                  # Deze file
+├── index.html
+└── README.md
 ```
 
 ## 🔧 Algoritmes

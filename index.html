@@ -3,239 +3,250 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Noctilucent - Visualisatie van atmosferische metingen">
-    <title>Noctilucent - Atmosferische Metingen</title>
+    <meta name="description" content="Radiosondes van DWD-station Norderney: temperatuur, wind, vocht en stabiliteit.">
+    <title>Noctilucent · Norderney</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.3.0/dist/maplibre-gl.css">
     <link rel="stylesheet" href="app/styles/style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <script type="importmap">
+    {
+        "imports": {
+            "leaflet": "https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.esm.js",
+            "maplibre-gl": "https://unpkg.com/maplibre-gl@6.3.0/dist/maplibre-gl.mjs"
+        }
+    }
+    </script>
 </head>
 <body>
-    <header class="main-header">
-        <nav class="main-nav container">
-            <div class="logo">
-                <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                    <!-- Achtergrond cirkel -->
-                    <circle cx="50" cy="50" r="45" fill="#2c3e50"/>
-                    
-                    <!-- Gestileerde noctilucente wolken -->
-                    <path d="M20,50 Q35,30 50,50 T80,50" 
-                          fill="none" 
-                          stroke="#3498db" 
-                          stroke-width="3"
-                          opacity="0.8">
-                        <animate attributeName="d" 
-                                 dur="4s" 
-                                 repeatCount="indefinite"
-                                 values="M20,50 Q35,30 50,50 T80,50;
-                                         M20,50 Q35,70 50,50 T80,50;
-                                         M20,50 Q35,30 50,50 T80,50"/>
-                    </path>
-                    
-                    <path d="M20,60 Q35,40 50,60 T80,60" 
-                          fill="none" 
-                          stroke="#85c1e9" 
-                          stroke-width="2"
-                          opacity="0.6">
-                        <animate attributeName="d" 
-                                 dur="3s" 
-                                 repeatCount="indefinite"
-                                 values="M20,60 Q35,40 50,60 T80,60;
-                                         M20,60 Q35,80 50,60 T80,60;
-                                         M20,60 Q35,40 50,60 T80,60"/>
-                    </path>
-                    
-                    <!-- Sterren -->
-                    <circle cx="30" cy="30" r="1" fill="white"/>
-                    <circle cx="70" cy="35" r="1" fill="white"/>
-                    <circle cx="45" cy="25" r="1" fill="white"/>
-                    <circle cx="65" cy="70" r="1" fill="white"/>
-                </svg>
-                <h1>Noctilucent</h1>
-            </div>
-            <button class="mobile-menu-toggle" aria-label="Menu">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
-            <ul class="nav-links">
-                <li><a href="#home" class="active">Home</a></li>
-                <li><a href="#figures">Metingen</a></li>
-                <li><a href="#about">Over Ons</a></li>
-                <li><a href="#contact">Contact</a></li>
-            </ul>
+    <header class="site-header">
+        <a class="brand" href="#metingen">
+            <span class="brand-mark" aria-hidden="true"></span>
+            <span class="brand-name">Noctilucent</span>
+        </a>
+        <p class="station-line">
+            <span id="station-label">Norderney</span>
+            <time id="latest-time">laden</time>
+        </p>
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
+        <nav id="site-nav" class="site-nav" data-open="false">
+            <a href="#metingen">Metingen</a>
+            <a href="#toelichting">Toelichting</a>
+            <a href="#over">Over</a>
+            <a href="#contact">Contact</a>
         </nav>
     </header>
 
-    <main class="container">
-        <section id="home" class="section">
-            <h2>Welkom bij Noctilucent</h2>
-            <p class="intro-text">
-                Welkom op deze website waar we de fascinerende wereld van atmosferische metingen verkennen.
-            </p>
-        </section>
-
-        <section id="figures" class="section">
-            <h2>Atmosferische Metingen</h2>
-            <div class="measurement-info">
-                <h3>Uitgebreide Atmosferische Analyse</h3>
-                <p>
-                    De getoonde visualisaties zijn gebaseerd op meteorologische sondemetingen (radiosondes) die worden uitgevoerd
-                    door de Duitse Weerdienst (DWD) vanaf meetstation Norderney (10113). Deze metingen worden twee keer per dag uitgevoerd 
-                    (om 00 UTC en 12 UTC) en geven een uitgebreid verticaal profiel van de atmosfeer tot ongeveer 30 km hoogte.
-                </p>
-                
-                <h4>Visualisatie-overzicht:</h4>
-                
-                <div class="plot-description">
-                    <h5>1. Temperatuurprofiel met Tropopauze</h5>
-                    <p>
-                        De hoofdvisualisatie toont temperatuurgegevens op verschillende hoogtes, waarbij de rode gestippelde lijn de
-                        tropopauze aangeeft - de belangrijke grenslaag tussen de troposfeer en de stratosfeer. De tropopauze wordt
-                        bepaald volgens de WMO-definitie als het laagste niveau waar de temperatuurgradiënt kleiner wordt dan -2°C/km.
-                    </p>
-                </div>
-
-                <div class="plot-description">
-                    <h5>2. Windsnelheid</h5>
-                    <p>
-                        Toont de windsnelheid op verschillende hoogtes. Hoge windsnelheden op grote hoogte duiden op de jet stream,
-                        die belangrijk is voor de luchtvaart en het transport van weersystemen. Windschering (snelle veranderingen
-                        in windsnelheid met de hoogte) is cruciaal voor onweersbui-ontwikkeling.
-                    </p>
-                </div>
-
-                <div class="plot-description">
-                    <h5>3. Windrichting</h5>
-                    <p>
-                        De windrichting op verschillende niveaus toont atmosferische circulatiepatronen. Veranderingen in windrichting
-                        met de hoogte (windschering) zijn belangrijk voor de ontwikkeling van convectieve systemen en tornadogenese.
-                    </p>
-                </div>
-
-                <div class="plot-description">
-                    <h5>4. Relatieve Vochtigheid</h5>
-                    <p>
-                        Geeft aan hoeveel waterdamp de lucht bevat relatief tot de maximale capaciteit bij die temperatuur.
-                        Hoge waarden (blauw) duiden op potentiële wolkvorming en neerslag, terwijl lage waarden droge luchtmassa's aangeven.
-                    </p>
-                </div>
-
-                <div class="plot-description">
-                    <h5>5. Mengverhouding (Mixing Ratio)</h5>
-                    <p>
-                        De absolute hoeveelheid waterdamp in de lucht (g water per kg droge lucht). Dit is een conservatieve eigenschap
-                        die niet verandert wanneer luchtpakketten stijgen of dalen, waardoor het nuttig is voor het traceren van luchtmassa's
-                        en het voorspellen van condensatie.
-                    </p>
-                </div>
-
-                <div class="plot-description">
-                    <h5>6. Potentiële Temperatuur</h5>
-                    <p>
-                        De temperatuur die een luchtpakket zou hebben als het adiabatisch naar 1000 hPa wordt gebracht.
-                        Constante waarden duiden op neutrale stabiliteit, toenemende waarden op stabiele condities,
-                        en afnemende waarden op onstabiele atmosferische condities.
-                    </p>
-                </div>
-
-                <div class="plot-description">
-                    <h5>7. K-Index (Stabiliteitsindex)</h5>
-                    <p>
-                        Een maat voor de atmosferische stabiliteit en het onweersbui potentieel:
-                        <ul>
-                            <li>&lt; 20: Zeer geringe kans op onweer</li>
-                            <li>20-25: Geringe kans op onweer</li>
-                            <li>26-30: Geïsoleerde onweersbuien mogelijk</li>
-                            <li>31-35: Verspreide onweersbuien waarschijnlijk</li>
-                            <li>&gt; 35: Uitgebreide onweersactiviteit</li>
-                        </ul>
-                    </p>
-                </div>
-
-                <div class="plot-description">
-                    <h5>8. CAPE en Lifted Index</h5>
-                    <p>
-                        <strong>CAPE</strong> (Convective Available Potential Energy) meet de energie beschikbaar voor convectie:
-                        <ul>
-                            <li>0-1000 J/kg: Zwakke convectie</li>
-                            <li>1000-2500 J/kg: Matige convectie</li>
-                            <li>2500-4000 J/kg: Sterke convectie</li>
-                            <li>&gt; 4000 J/kg: Extreme convectie</li>
-                        </ul>
-                        
-                        <strong>Lifted Index</strong> geeft atmosferische stabiliteit aan:
-                        <ul>
-                            <li>&gt; 2: Stabiel (onweer onwaarschijnlijk)</li>
-                            <li>0 tot 2: Matig stabiel</li>
-                            <li>-2 tot 0: Licht onstabiel</li>
-                            <li>&lt; -2: Onstabiel (onweer waarschijnlijk)</li>
-                        </ul>
-                    </p>
-                </div>
-                
-                <p>
-                    <strong>Meteorologische toepassingen:</strong>
-                </p>
-                <ul>
-                    <li><strong>Weersvoorspelling:</strong> Identificatie van fronten, inversielagen en atmosferische stabiliteit</li>
-                    <li><strong>Onweersbui-voorspelling:</strong> CAPE, lifted index en windschering zijn cruciale parameters</li>
-                    <li><strong>Luchtvaart:</strong> Windschering detectie en turbulentie voorspelling</li>
-                    <li><strong>Klimaatstudie:</strong> Langetermijntrends in atmosferische structuur</li>
-                    <li><strong>Atmosferische chemie:</strong> Transport van pollutanten in verschillende lagen</li>
-                </ul>
-                <p>
-                    De ruwe data wordt dagelijks verwerkt. De kleurschaal vertegenwoordigt de temperatuur in graden Celsius.
-                </p>
-            </div>
-            <div id="figures-container" class="figures-grid"></div>
-        </section>
-
-        <section id="about" class="section about-section">
-            <h2>Over</h2>
-            <div class="about-content">
-                <div class="profile-info">
-                    <div class="profile-image">
-                        <img src="app/images/profile.jpeg" alt="Yorick de Wijs" class="profile-photo">
+    <main>
+        <section class="hero" aria-label="Laatste oplating">
+            <div class="wrap">
+                <p class="eyebrow" id="hero-place">Station 10113</p>
+                <dl class="stats">
+                    <div>
+                        <dt>Temperatuur</dt>
+                        <dd id="hero-temp"></dd>
                     </div>
-                    <div class="profile-details">
-                        <h3>Yorick de Wijs</h3>
-                        <p class="job-title">Meteoroloog bij KNMI</p>
-                        <div class="social-links">
-                            <a href="https://www.linkedin.com/in/yorick-de-wijs-07799924/" target="_blank" rel="noopener noreferrer" class="social-link">LinkedIn</a>
-                            <a href="https://twitter.com/" target="_blank" rel="noopener noreferrer" class="social-link">Twitter</a>
+                    <div>
+                        <dt>Dauwpunt</dt>
+                        <dd id="hero-dew"></dd>
+                    </div>
+                    <div>
+                        <dt>Wind</dt>
+                        <dd id="hero-wind"></dd>
+                    </div>
+                    <div>
+                        <dt>Tropopauze</dt>
+                        <dd id="hero-trop"></dd>
+                    </div>
+                    <div>
+                        <dt>K-index</dt>
+                        <dd id="hero-k"></dd>
+                    </div>
+                    <div>
+                        <dt>MUCAPE</dt>
+                        <dd id="hero-cape"></dd>
+                    </div>
+                </dl>
+            </div>
+        </section>
+
+        <section class="workspace wrap" id="metingen">
+            <div class="toolbar">
+                <div class="periods" role="group" aria-label="Periode">
+                    <button type="button" data-period="14d">14 dagen</button>
+                    <button type="button" data-period="60d" aria-pressed="true">60 dagen</button>
+                    <button type="button" data-period="1y">Een jaar</button>
+                    <button type="button" data-period="all">Alles</button>
+                </div>
+                <p class="readout" id="readout" aria-live="polite"></p>
+            </div>
+
+            <div class="board">
+                <div class="charts" id="charts">
+                    <article class="card">
+                        <header class="card-head">
+                            <h2>Temperatuur</h2>
+                            <p>De lichte lijn is de tropopauze, het laagste niveau waar de gradiënt boven −2 °C/km komt en dat over de volgende 2 km zo blijft.</p>
+                        </header>
+                        <div class="plot">
+                            <canvas id="temp-field" class="field" aria-label="Temperatuur tegen hoogte en tijd"></canvas>
+                            <canvas class="cursor" aria-hidden="true"></canvas>
                         </div>
+                        <div class="scale" id="scale-temp"></div>
+                    </article>
+
+                    <article class="card">
+                        <header class="card-head">
+                            <h2>Wind</h2>
+                            <p>Kleur is snelheid in knopen. De vanen wijzen naar de richting waar de wind vandaan komt.</p>
+                        </header>
+                        <div class="plot">
+                            <canvas id="wind-field" class="field" aria-label="Windsnelheid en windrichting"></canvas>
+                            <canvas class="cursor" aria-hidden="true"></canvas>
+                        </div>
+                        <div class="scale" id="scale-wind"></div>
+                    </article>
+
+                    <article class="card">
+                        <header class="card-head">
+                            <h2>Vocht</h2>
+                            <p>Relatieve vochtigheid loopt van droog naar verzadigd. Mengverhouding is de hoeveelheid waterdamp in gram per kilogram droge lucht.</p>
+                            <div class="switch" role="group" aria-label="Vochtgrootheid">
+                                <button type="button" data-moisture="RELH" aria-pressed="true">Relatieve vochtigheid</button>
+                                <button type="button" data-moisture="MIXR" aria-pressed="false">Mengverhouding</button>
+                            </div>
+                        </header>
+                        <div class="plot">
+                            <canvas id="moist-field" class="field" aria-label="Vocht tegen hoogte en tijd"></canvas>
+                            <canvas class="cursor" aria-hidden="true"></canvas>
+                        </div>
+                        <div class="scale" id="scale-moist"></div>
+                    </article>
+
+                    <article class="card">
+                        <header class="card-head">
+                            <h2>Potentiële temperatuur</h2>
+                            <p>Temperatuur herleid naar 1000 hPa. Een toename met de hoogte wijst op een stabiele laag.</p>
+                        </header>
+                        <div class="plot">
+                            <canvas id="theta-field" class="field" aria-label="Potentiële temperatuur tegen hoogte en tijd"></canvas>
+                            <canvas class="cursor" aria-hidden="true"></canvas>
+                        </div>
+                        <div class="scale" id="scale-theta"></div>
+                    </article>
+
+                    <article class="card">
+                        <header class="card-head">
+                            <h2>K-index</h2>
+                            <p>De K-index is over de hele reeks op dezelfde manier berekend. Boven 30 wordt onweer waarschijnlijker.</p>
+                        </header>
+                        <div class="plot plot-line">
+                            <canvas id="k-field" class="field" aria-label="K-index in de tijd"></canvas>
+                            <canvas class="cursor" aria-hidden="true"></canvas>
+                        </div>
+                    </article>
+
+                    <article class="card">
+                        <header class="card-head">
+                            <h2>CAPE en lifted index</h2>
+                            <p>CAPE en de lifted index lopen tot 26 juni 2026. Daarna volgen MUCAPE en de virtuele lifted index.</p>
+                            <ul class="legend">
+                                <li><i class="swatch solid cape"></i>CAPE</li>
+                                <li><i class="swatch dotted mucape"></i>MUCAPE</li>
+                                <li><i class="swatch solid lifted"></i>Lifted index</li>
+                                <li><i class="swatch dotted virtual"></i>Virtueel</li>
+                            </ul>
+                        </header>
+                        <div class="plot plot-line">
+                            <canvas id="cape-field" class="field" aria-label="CAPE en lifted index in de tijd"></canvas>
+                            <canvas class="cursor" aria-hidden="true"></canvas>
+                        </div>
+                    </article>
+                </div>
+
+                <aside class="card profile-card">
+                    <header class="card-head">
+                        <h2>Sounding</h2>
+                        <p id="profile-time"></p>
+                    </header>
+                    <canvas id="profile" aria-label="Sounding van temperatuur en dauwpunt"></canvas>
+                    <dl class="profile-meta" id="profile-meta"></dl>
+                </aside>
+            </div>
+            <p class="status" id="status" role="status"></p>
+        </section>
+
+        <section class="prose wrap" id="toelichting">
+            <div class="card toelichting-card">
+                <div class="explain">
+                    <div class="explain-copy">
+                        <h2>Toelichting</h2>
+                        <p>
+                            De ballonnen vertrekken van DWD-station 10113 op Norderney, om 00:00 en 12:00 UTC,
+                            en af en toe om 06:00 of 18:00. Een oplating geeft temperatuur, vocht en wind
+                            van het oppervlak tot de top van de sonde, meestal rond 30 km.
+                        </p>
                     </div>
+                    <article class="launch-card">
+                        <header class="card-head">
+                            <h2>Oplaatlocatie</h2>
+                            <p>DWD-station 10113 op Norderney.</p>
+                        </header>
+                        <div id="launch-map" class="launch-map" role="region" aria-label="Kaart van DWD-station 10113 op Norderney"></div>
+                    </article>
                 </div>
-                <div class="about-text">
-                    <p>
-                        Als meteoroloog bij het Koninklijk Nederlands Meteorologisch Instituut (KNMI) houd ik mij dagelijks bezig met het bestuderen van atmosferische verschijnselen. Mijn specifieke interesse gaat uit naar noctilucente wolken en de verschillende aspecten van de hogere atmosfeer.
-                    </p>
-                    <p>
-                        Op deze persoonlijke website deel ik mijn onderzoek en visualisaties van atmosferische metingen. Deze metingen helpen ons om beter inzicht te krijgen in de processen die zich afspelen in de hogere luchtlagen van onze atmosfeer.
-                    </p>
-                    <p>
-                        Door middel van geavanceerde meettechnieken en data-analyse probeer ik complexe atmosferische fenomenen inzichtelijk te maken voor zowel vakgenoten als geïnteresseerden. De visualisaties op deze website zijn bedoeld om deze fascinerende data op een toegankelijke manier te presenteren.
-                    </p>
-                </div>
+                <dl class="notes">
+                    <div>
+                        <dt>K-index</dt>
+                        <dd>Onder 20 is onweer zeldzaam. Tussen 26 en 30 zijn losse buien mogelijk, boven 35 een breder gebied.</dd>
+                    </div>
+                    <div>
+                        <dt>CAPE</dt>
+                        <dd>Onder 1.000 J/kg is de convectie zwak, van 1.000 tot 2.500 matig, daarboven sterk. MUCAPE geldt voor de meest onstabiele laag. De oudere oppervlakte-CAPE stopt op 26 juni 2026.</dd>
+                    </div>
+                    <div>
+                        <dt>Lifted index</dt>
+                        <dd>Boven 2 is de kolom stabiel. Onder 0 wordt buivorming waarschijnlijker. De virtuele index telt het vocht in de temperatuur mee.</dd>
+                    </div>
+                </dl>
             </div>
         </section>
 
-        <section id="contact" class="section contact-section">
+        <section class="wrap about" id="over">
+            <article class="card about-card">
+                <div class="about-layout">
+                    <div class="about-copy">
+                        <h2>Over</h2>
+                        <h3>Yorick de Wijs</h3>
+                        <p class="role">Meteoroloog bij het KNMI</p>
+                        <p>Ik ben meteoroloog bij het Koninklijk Nederlands Meteorologisch Instituut (KNMI). Ik werk aan noctilucente wolken en de hogere atmosfeer.</p>
+                        <p>Op deze site staan de radiosondes van DWD-station 10113 op Norderney.</p>
+                        <p class="about-links">
+                            <a href="https://www.linkedin.com/in/yorick-de-wijs-07799924/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                            <a href="https://twitter.com/" target="_blank" rel="noopener noreferrer">Twitter</a>
+                        </p>
+                    </div>
+                    <div class="portrait-frame">
+                        <img src="app/images/profile.jpeg" alt="Yorick de Wijs" class="portrait" width="240" height="240">
+                    </div>
+                </div>
+            </article>
+        </section>
+
+        <section class="prose wrap" id="contact">
             <h2>Contact</h2>
-            <div class="contact-content">
-                <p>Heeft u vragen over mijn onderzoek of wilt u meer weten over atmosferische metingen? Neem gerust contact met mij op.</p>
-                <a href="mailto:contact@example.com" class="contact-button">Stuur een e-mail</a>
-            </div>
+            <p>Vragen over de metingen of over het onderzoek kunt u mailen.</p>
+            <p><a class="mail" href="mailto:contact@example.com">Stuur een e-mail</a></p>
         </section>
     </main>
 
-    <footer class="main-footer">
-        <div class="container">
-            <p>&copy; 2024 Noctilucent. Alle rechten voorbehouden.</p>
+    <footer class="site-footer">
+        <div class="wrap">
+            <p>© 2026 Noctilucent. Radiosondes van Deutscher Wetterdienst, station Norderney.</p>
         </div>
     </footer>
 
     <script src="app/scripts/main.js"></script>
+    <script src="app/scripts/atmosphere.js"></script>
+    <script type="module" src="app/scripts/launch-map.js"></script>
 </body>
 </html>
