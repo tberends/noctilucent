@@ -378,13 +378,13 @@ button:focus-visible {
 
 .explain {
     display: grid;
-    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+    grid-template-columns: minmax(0, 0.9fr) minmax(280px, 1.1fr);
     gap: 1.25rem 1.75rem;
-    align-items: center;
+    align-items: start;
 }
 
 .explain-copy,
-.launch-card {
+.launch-map {
     min-width: 0;
 }
 
@@ -397,17 +397,9 @@ button:focus-visible {
     max-width: 38rem;
 }
 
-.launch-card {
-    position: relative;
-    z-index: 0;
-}
-
-.launch-card .card-head p {
-    margin-bottom: 0.65rem;
-}
-
 .launch-map {
-    height: 310px;
+    width: 100%;
+    height: 232px;
     border: 1px solid var(--line);
     border-radius: 12px;
     overflow: hidden;
@@ -450,25 +442,19 @@ button:focus-visible {
 }
 
 .launch-map .leaflet-bottom.leaflet-right {
-    left: 0;
-    right: 0;
-    bottom: 0;
-    margin: 0;
+    max-width: calc(100% - 0.6rem);
     pointer-events: none;
 }
 
 .launch-map .leaflet-control-attribution {
-    float: right;
-    max-width: min(100%, 36rem);
-    margin: 0;
-    padding: 0.22rem 0.6rem 0.28rem;
-    background: rgba(7, 11, 20, 0.84);
+    margin: 0 0.35rem 0.3rem 0;
+    padding: 0.12rem 0.4rem;
+    background: rgba(7, 11, 20, 0.78);
     color: var(--muted);
-    font-size: 0.72rem;
-    line-height: 1.35;
+    font-size: 0.68rem;
+    line-height: 1.3;
     white-space: normal;
-    text-align: right;
-    border-radius: 8px 0 0 0;
+    border-radius: 6px;
     box-shadow: none;
     pointer-events: auto;
 }
