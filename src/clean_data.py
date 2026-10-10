@@ -1,7 +1,9 @@
-import pickle
+import shutil
 from datetime import datetime
 import pandas as pd
 from collections import defaultdict
+
+from src.sounding_store import PROFILES_PATH, STATION_PATH, load_profiles, load_station, save_frames
 
 def analyze_timestamps(data):
     """
@@ -63,9 +65,9 @@ def analyze_timestamps(data):
                 if timestamp.minute < 0 or timestamp.minute > 59:
                     issues.append(f'Ongeldige minuut: {timestamp.minute}')
                 
-                # Check voor ongebruikelijke tijdstempels (bijv. niet op 00 of 12 uur)
-                if timestamp.hour not in [0, 12]:
-                    issues.append(f'Ongebruikelijk uur: {timestamp.hour} (verwacht 0 of 12)')
+                # FM35 soundings are 00 and 12 UTC, with occasional 06 and 18 UTC slots.
+                if timestamp.hour not in [0, 6, 12, 18]:
+                    issues.append(f'Ongebruikelijk uur: {timestamp.hour} (verwacht 0, 6, 12 of 18)')
                 
                 if issues:
                     corrupt_entries.append({
@@ -234,71 +236,85 @@ def clean_data(data, corrupt_keys, suspicious_keys=None, dry_run=True):
     
     return None
 
+def station_as_records(station):
+    """Adapt the station table to the dict shape the timestamp checks expect."""
+    data = {}
+    for _, row in station.iterrows():
+        timestamp = pd.Timestamp(row["time"])
+        key = timestamp.strftime("%Y-%m-%d %H:%M")
+        observation = row["Observation time"] if "Observation time" in row.index else None
+        if observation is None or pd.isna(observation):
+            observation = timestamp.strftime("%y%m%d/%H%M")
+        info = {"Observation time": str(observation)}
+        for column, value in row.items():
+            if column in ("time", "Observation time") or pd.isna(value):
+                continue
+            info[column] = value
+        data[key] = {"station_info": info}
+    return data
+
+
 def main():
     """
-    Hoofdfunctie voor het analyseren en opschonen van corrupte data.
-    
-    Gebruik: python clean_data.py [--clean] [--backup]
-    --clean: Voer daadwerkelijk opschoning uit
-    --backup: Maak backup van originele bestand voordat opschoning
+    Analyseert en schoont het Parquet-archief.
+
+    Gebruik: python src/clean_data.py [--clean] [--backup]
+    --clean: verwijder gemarkeerde oplatingen
+    --backup: kopieer de Parquet-bestanden voor het opschonen
     """
     import sys
-    import shutil
-    from datetime import datetime
-    
-    # Parse command line arguments
-    do_clean = '--clean' in sys.argv
-    do_backup = '--backup' in sys.argv or do_clean  # Auto-backup bij clean
-    
-    # Laad de data
-    print("Laden van data/sounding.pkl...")
+
+    do_clean = "--clean" in sys.argv
+    do_backup = "--backup" in sys.argv or do_clean
+
+    print("Laden van data/station.parquet en data/profiles.parquet...")
     try:
-        with open('data/sounding.pkl', 'rb') as f:
-            data = pickle.load(f)
-        print(f"Data geladen: {len(data)} entries gevonden.\n")
-    except FileNotFoundError:
-        print("Fout: data/sounding.pkl niet gevonden!")
+        station = load_station()
+        profiles = load_profiles()
+    except Exception as error:
+        print(f"Fout bij het laden van data: {error}")
         return
-    except Exception as e:
-        print(f"Fout bij het laden van data: {str(e)}")
+    if station.empty:
+        print("Fout: data/station.parquet is leeg of ontbreekt.")
         return
-    
-    # Analyseer tijdstempels
+
+    data = station_as_records(station)
+    print(f"Data geladen: {len(data)} entries gevonden.\n")
+
     corrupt_entries, valid_entries, timestamp_issues = analyze_timestamps(data)
-    
-    # Check tijdsconsistency
     suspicious_entries = check_temporal_consistency(valid_entries)
-    
-    # Print rapport
     print_report(corrupt_entries, valid_entries, timestamp_issues, suspicious_entries)
-    
-    # Bereid opschoning voor
-    corrupt_keys = [e['key'] for e in corrupt_entries]
-    suspicious_keys = [e['key'] for e in suspicious_entries]
-    
+
+    corrupt_keys = [entry["key"] for entry in corrupt_entries]
+    suspicious_keys = [entry["key"] for entry in suspicious_entries]
+
     if corrupt_keys or suspicious_keys:
         print("=" * 80)
         print("OPSCHONING")
         print("=" * 80)
         print()
-        
+
         if do_clean:
-            # Maak backup als gevraagd
             if do_backup:
-                backup_filename = f"data/sounding_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pkl"
-                shutil.copy('data/sounding.pkl', backup_filename)
-                print(f"Backup gemaakt: {backup_filename}\n")
-            
-            # Voer opschoning uit
-            cleaned_data = clean_data(data, corrupt_keys, suspicious_keys, dry_run=False)
-            
-            if cleaned_data is not None:
-                with open('data/sounding.pkl', 'wb') as f:
-                    pickle.dump(cleaned_data, f)
-                print("\nOpgeschoonde data opgeslagen naar data/sounding.pkl")
-                print(f"Origineel had {len(data)} entries, nu {len(cleaned_data)} entries.")
+                stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                profile_backup = PROFILES_PATH.with_name(f"profiles_backup_{stamp}.parquet")
+                station_backup = STATION_PATH.with_name(f"station_backup_{stamp}.parquet")
+                shutil.copy(PROFILES_PATH, profile_backup)
+                shutil.copy(STATION_PATH, station_backup)
+                print(f"Backup gemaakt: {profile_backup.name}, {station_backup.name}\n")
+
+            remove = set(corrupt_keys + suspicious_keys)
+            keep = ~station["time"].dt.strftime("%Y-%m-%d %H:%M").isin(remove)
+            cleaned_station = station.loc[keep].copy()
+            cleaned_profiles = profiles.loc[
+                profiles["time"].dt.strftime("%Y-%m-%d %H:%M").isin(
+                    cleaned_station["time"].dt.strftime("%Y-%m-%d %H:%M")
+                )
+            ].copy()
+            save_frames(cleaned_profiles, cleaned_station)
+            print("\nOpgeschoonde data opgeslagen naar de Parquet-bestanden")
+            print(f"Origineel had {len(station)} entries, nu {len(cleaned_station)} entries.")
         else:
-            # Dry-run
             print("Dit is een DRY RUN. Geen data wordt verwijderd.")
             print("Voeg --clean toe aan het commando om daadwerkelijk op te schonen.")
             print("Voeg --backup toe om automatisch een backup te maken.\n")

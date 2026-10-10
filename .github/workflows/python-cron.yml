@@ -3,52 +3,37 @@ name: Retrieve data and create figures
 on:
   schedule:
     - cron: '00 17 * * *'
-  workflow_dispatch:  # Voegt mogelijkheid toe om workflow handmatig te starten
+  workflow_dispatch:
 
 jobs:
   generate-and-commit-csv:
-    runs-on: ubuntu-latest
-    permissions:                # Job-level permissions configuration starts hier
-      contents: write           # 'write' access to repository contents
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
-      # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v7
 
-      # Step 2: Setup Python environment
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.13' # Install the Python version needed
+          python-version: '3.13'
 
-      # Step 3: Install dependencies
       - name: Install dependencies
-        run: pip install requests bs4 numpy pandas matplotlib plotly
+        run: pip install requests bs4 numpy pandas matplotlib plotly pyarrow
 
-      # Step 4: Execute the Python script to create a pickle
       - name: Retrieve data and create figures
         run: python main.py
 
-      # Step 5: Commit and push the generated CSV file if there are changes
-      - name: Commit files
-        id: commit
+      - name: Commit and push
         run: |
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add data/* app/visualizations/*
-          if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Retrieve data and create figures"
-            echo "changes=true" >> $GITHUB_ENV
-          else
+          git add data/profiles.parquet data/station.parquet
+          git add -f app/visualizations/sounding_plot.html
+          if [ -z "$(git status --porcelain)" ]; then
             echo "No changes to commit"
-            echo "changes=false" >> $GITHUB_ENV
             exit 0
-          fi        
-      - name: Push changes
-        if: success() && env.changes == 'true'
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref }}
-          directory: .
-          force: true
+          fi
+          git commit -m "Retrieve data and create figures"
+          git push

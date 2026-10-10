@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
-import pickle
-from datetime import datetime, timedelta
+from datetime import datetime
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
+from src.sounding_store import load_profiles, load_station
 
 def find_tropopause(heights, temps):
     """
@@ -40,6 +41,17 @@ def find_tropopause(heights, temps):
     
     return None
 
+def _interp_profile(heights, values, unique_heights):
+    """Interpolate one sounding. Heights are sorted so a folded profile still plots."""
+    order = np.argsort(heights, kind="mergesort")
+    xp = heights[order]
+    fp = values[order]
+    unique_xp, unique_index = np.unique(xp, return_index=True)
+    if len(unique_xp) < 2:
+        return np.full(len(unique_heights), np.nan)
+    return np.interp(unique_heights, unique_xp, fp[unique_index])
+
+
 def create_wind_grid(time_arr, height_arr, wind_dir, wind_speed):
     """Creëer grids voor windrichting en windsnelheid"""
     unique_times = np.unique(time_arr)
@@ -51,8 +63,8 @@ def create_wind_grid(time_arr, height_arr, wind_dir, wind_speed):
     for i, t in enumerate(unique_times):
         mask = time_arr == t
         if np.any(mask):
-            wind_dir_grid[:, i] = np.interp(unique_heights, height_arr[mask], wind_dir[mask])
-            wind_speed_grid[:, i] = np.interp(unique_heights, height_arr[mask], wind_speed[mask])
+            wind_dir_grid[:, i] = _interp_profile(height_arr[mask], wind_dir[mask], unique_heights)
+            wind_speed_grid[:, i] = _interp_profile(height_arr[mask], wind_speed[mask], unique_heights)
     
     return unique_times, unique_heights, wind_dir_grid, wind_speed_grid
 
@@ -67,97 +79,43 @@ def create_humidity_grid(time_arr, height_arr, rel_humidity, mix_ratio):
     for i, t in enumerate(unique_times):
         mask = time_arr == t
         if np.any(mask):
-            rel_hum_grid[:, i] = np.interp(unique_heights, height_arr[mask], rel_humidity[mask])
-            mix_ratio_grid[:, i] = np.interp(unique_heights, height_arr[mask], mix_ratio[mask])
+            rel_hum_grid[:, i] = _interp_profile(height_arr[mask], rel_humidity[mask], unique_heights)
+            mix_ratio_grid[:, i] = _interp_profile(height_arr[mask], mix_ratio[mask], unique_heights)
     
     return unique_times, unique_heights, rel_hum_grid, mix_ratio_grid
 
+def _index_series(station, column):
+    """Times and values for one index. Missing values stay out of the series."""
+    if column not in station.columns:
+        return np.array([], dtype="datetime64[ns]"), np.array([], dtype=float)
+    values = pd.to_numeric(station[column], errors="coerce")
+    mask = values.notna().to_numpy()
+    times = station.loc[mask, "time"].to_numpy(dtype="datetime64[ns]")
+    return times, values.to_numpy(dtype=float)[mask]
+
+
 def plot_sounding():
-    # Load the data from pickle file in the data folder
-    with open('data/sounding.pkl', 'rb') as f:
-        data = pickle.load(f)
+    profiles = load_profiles()
+    station = load_station()
+    if profiles.empty:
+        raise FileNotFoundError("Geen profieldata in data/profiles.parquet")
 
-    # Create lists to store all data
-    time_list = []
-    height_list = []
-    temperature_list = []
-    wind_dir_list = []
-    wind_speed_list = []
-    rel_humidity_list = []
-    mix_ratio_list = []
-    pot_temp_list = []
-    
-    # Lists for stability indices (één waarde per tijdstap)
-    stability_times = []
-    cape_values = []
-    lifted_index_values = []
-    k_index_values = []
+    valid = profiles["HGHT"].notna() & profiles["TEMP"].notna()
+    frame = profiles.loc[valid]
+    time_arr = frame["time"].to_numpy(dtype="datetime64[ns]")
+    height_arr = frame["HGHT"].to_numpy(dtype=float)
+    temp_arr = frame["TEMP"].to_numpy(dtype=float)
+    wind_dir_arr = frame["DRCT"].fillna(0).to_numpy(dtype=float)
+    wind_speed_arr = frame["SKNT"].fillna(0).to_numpy(dtype=float)
+    rel_hum_arr = frame["RELH"].fillna(0).to_numpy(dtype=float)
+    mix_ratio_arr = frame["MIXR"].fillna(0).to_numpy(dtype=float)
+    pot_temp_arr = frame["THTA"].fillna(frame["TEMP"]).to_numpy(dtype=float)
 
-    # Loop over each key in the data dictionary
-    for key in data.keys():
-        # Extract time from station information
-        timestamp = data[key]['station_info']['Observation time']
-        timestamp = datetime.strptime(timestamp, '%y%m%d/%H%M')
-
-        # Extract the table data for the key
-        df_table = data[key]['table']
-        
-        # Convert all relevant columns to numeric
-        heights = pd.to_numeric(df_table['HGHT'], errors='coerce')
-        temps = pd.to_numeric(df_table['TEMP'], errors='coerce')
-        wind_dir = pd.to_numeric(df_table['DRCT'], errors='coerce')
-        wind_speed = pd.to_numeric(df_table['SKNT'], errors='coerce')
-        rel_humidity = pd.to_numeric(df_table['RELH'], errors='coerce')
-        mix_ratio = pd.to_numeric(df_table['MIXR'], errors='coerce')
-        pot_temp = pd.to_numeric(df_table['THTA'], errors='coerce')
-        
-        # Only append valid data points
-        valid_mask = ~(heights.isna() | temps.isna())
-        valid_count = sum(valid_mask)
-        
-        if valid_count > 0:
-            time_list.extend([timestamp] * valid_count)
-            height_list.extend(heights[valid_mask])
-            temperature_list.extend(temps[valid_mask])
-            
-            # Voeg winddata toe (met fallback voor missende waarden)
-            wind_dir_valid = wind_dir[valid_mask].fillna(0)
-            wind_speed_valid = wind_speed[valid_mask].fillna(0)
-            wind_dir_list.extend(wind_dir_valid)
-            wind_speed_list.extend(wind_speed_valid)
-            
-            # Voeg vochtigheidsdata toe
-            rel_hum_valid = rel_humidity[valid_mask].fillna(0)
-            mix_ratio_valid = mix_ratio[valid_mask].fillna(0)
-            rel_humidity_list.extend(rel_hum_valid)
-            mix_ratio_list.extend(mix_ratio_valid)
-            
-            # Voeg potentiële temperatuur toe
-            pot_temp_valid = pot_temp[valid_mask].fillna(temps[valid_mask])
-            pot_temp_list.extend(pot_temp_valid)
-        
-        # Extract stability indices (één per tijdstap)
-        try:
-            cape = float(data[key]['station_info'].get('Convective Available Potential Energy', 0))
-            lifted_idx = float(data[key]['station_info'].get('Lifted index', 0))
-            k_idx = float(data[key]['station_info'].get('K index', 0))
-            
-            stability_times.append(timestamp)
-            cape_values.append(cape)
-            lifted_index_values.append(lifted_idx)
-            k_index_values.append(k_idx)
-        except (ValueError, TypeError):
-            pass
-
-    # Convert data to numpy arrays
-    time_arr = np.array(time_list)
-    height_arr = np.array(height_list)
-    temp_arr = np.array(temperature_list)
-    wind_dir_arr = np.array(wind_dir_list)
-    wind_speed_arr = np.array(wind_speed_list)
-    rel_hum_arr = np.array(rel_humidity_list)
-    mix_ratio_arr = np.array(mix_ratio_list)
-    pot_temp_arr = np.array(pot_temp_list)
+    k_times, k_index_values = _index_series(station, "K index")
+    cape_times, cape_values = _index_series(station, "Convective Available Potential Energy")
+    mucape_times, mucape_values = _index_series(station, "Most Unstable CAPE")
+    lifted_times, lifted_index_values = _index_series(station, "Lifted index")
+    virtual_times, virtual_lifted_values = _index_series(station, "Virtual Lifted Index")
 
     # Create regular grid voor temperatuur
     unique_times = np.unique(time_arr)
@@ -168,7 +126,7 @@ def plot_sounding():
     for i, t in enumerate(unique_times):
         mask = time_arr == t
         if np.any(mask):
-            temp_grid[:, i] = np.interp(unique_heights, height_arr[mask], temp_arr[mask])
+            temp_grid[:, i] = _interp_profile(height_arr[mask], temp_arr[mask], unique_heights)
 
     # Bereken tropopauze hoogte voor elke tijdstap
     tropopause_heights = []
@@ -195,7 +153,7 @@ def plot_sounding():
     for i, t in enumerate(unique_times):
         mask = time_arr == t
         if np.any(mask):
-            pot_temp_grid[:, i] = np.interp(unique_heights, height_arr[mask], pot_temp_arr[mask])
+            pot_temp_grid[:, i] = _interp_profile(height_arr[mask], pot_temp_arr[mask], unique_heights)
 
     # Create subplots with multiple rows
     fig = make_subplots(
@@ -308,60 +266,82 @@ def plot_sounding():
         row=6, col=1
     )
 
-    # 7. K-Index tijdserie (stabiliteitsindex)
-    if stability_times and k_index_values:
+    # 7. K-Index. Historical and new FM35 values share this definition.
+    if len(k_times):
         fig.add_trace(
             go.Scatter(
-                x=stability_times,
+                x=k_times,
                 y=k_index_values,
-                mode='lines+markers',
-                line=dict(color='orange', width=2),
-                marker=dict(size=4),
+                mode='lines',
+                line=dict(color='orange', width=1.5),
                 name='K-Index',
                 showlegend=True
             ),
             row=7, col=1
         )
 
-    # 8. CAPE en Lifted Index
-    if stability_times and cape_values:
+    # 8. Classic CAPE and lifted index stop where the new server stops publishing them.
+    # MUCAPE and the virtual lifted index continue as their own series.
+    if len(cape_times):
         fig.add_trace(
             go.Scatter(
-                x=stability_times,
+                x=cape_times,
                 y=cape_values,
-                mode='lines+markers',
-                line=dict(color='red', width=2),
-                marker=dict(size=4),
+                mode='lines',
+                line=dict(color='red', width=1.5),
                 name='CAPE',
                 showlegend=True
             ),
             row=8, col=1
         )
 
-    if stability_times and lifted_index_values:
+    if len(mucape_times):
         fig.add_trace(
             go.Scatter(
-                x=stability_times,
+                x=mucape_times,
+                y=mucape_values,
+                mode='lines',
+                line=dict(color='darkred', width=1.5, dash='dot'),
+                name='MUCAPE',
+                showlegend=True
+            ),
+            row=8, col=1
+        )
+
+    if len(lifted_times):
+        fig.add_trace(
+            go.Scatter(
+                x=lifted_times,
                 y=lifted_index_values,
-                mode='lines+markers',
-                line=dict(color='blue', width=2),
-                marker=dict(size=4),
+                mode='lines',
+                line=dict(color='blue', width=1.5),
                 name='Lifted Index',
-                yaxis='y2',
                 showlegend=True
             ),
             row=8, col=1, secondary_y=True
         )
 
-    # Update layout voor alle subplots
-    first_key = list(data.keys())[0]
-    station_number = data[first_key]['station_info']['Station number']
+    if len(virtual_times):
+        fig.add_trace(
+            go.Scatter(
+                x=virtual_times,
+                y=virtual_lifted_values,
+                mode='lines',
+                line=dict(color='royalblue', width=1.5, dash='dot'),
+                name='Virtual Lifted Index',
+                showlegend=True
+            ),
+            row=8, col=1, secondary_y=True
+        )
+
+    if "Station number" in station.columns and station["Station number"].notna().any():
+        station_number = str(station["Station number"].dropna().iloc[0])
+    else:
+        station_number = "10113"
     
     # Bepaal de laatste werkelijke datum en vandaag
-    today = datetime.now()
-    last_measurement = max(unique_times) if len(unique_times) > 0 else today
-    
-    # Gebruik de vroegste van vandaag of laatste meting als eindpunt
+    today = np.datetime64(datetime.now().replace(microsecond=0))
+    last_measurement = unique_times.max() if len(unique_times) else today
     end_date = min(today, last_measurement)
     
     fig.update_layout(
