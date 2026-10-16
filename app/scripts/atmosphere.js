@@ -95,9 +95,19 @@ let t1 = 0;
 let range0 = 0;
 let range1 = 0;
 let selected = 0;
+let hoverHeight = null;
+let hoverField = null;
 let band = null;
 let moisture = "RELH";
 let dragging = false;
+
+const FIELD_CANVAS = {
+    "temp-field": "TEMP",
+    "temp-anom-field": "TEMP_ANOM",
+    "wind-field": "SKNT",
+    "moist-field": null,
+    "theta-field": "THTA"
+};
 
 function formatNum(value, digits) {
     if (value == null || !Number.isFinite(Number(value))) return "geen";
@@ -686,6 +696,13 @@ function drawCursors() {
         box.ctx.moveTo(x, field._box.plot.y);
         box.ctx.lineTo(x, field._box.plot.y + field._box.plot.h);
         box.ctx.stroke();
+        if (hoverHeight != null && hoverField === field.id && FIELD_CANVAS[field.id] !== undefined) {
+            const y = yOfHeight(field._box, active.heights, active.heights[hoverHeight]);
+            box.ctx.beginPath();
+            box.ctx.moveTo(field._box.plot.x, y);
+            box.ctx.lineTo(field._box.plot.x + field._box.plot.w, y);
+            box.ctx.stroke();
+        }
         if (!band) return;
         const left = xEdge(field._box, Math.min(band.a, band.b));
         const right = xEdge(field._box, Math.max(band.a, band.b) + 1);
@@ -694,15 +711,63 @@ function drawCursors() {
     });
 }
 
+function indexValueAt(key) {
+    const times = meta.indices.times;
+    const values = meta.indices[key];
+    if (!times.length) return null;
+    const stamp = active.times[selected];
+    let bestIndex = 0;
+    let bestDelta = Math.abs(times[0] - stamp);
+    for (let i = 1; i < times.length; i += 1) {
+        const delta = Math.abs(times[i] - stamp);
+        if (delta < bestDelta) {
+            bestIndex = i;
+            bestDelta = delta;
+        }
+    }
+    if (bestDelta > 18 * 3600000) return null;
+    const value = values[bestIndex];
+    return value == null || !Number.isFinite(value) ? null : value;
+}
+
 function updateReadout() {
-    const temp = sample(active, "TEMP", 0, selected);
-    const anomaly = sample(active, "TEMP_ANOM", 0, selected);
-    const wind = sample(active, "SKNT", 0, selected);
-    const anomalyText = anomaly == null || !Number.isFinite(anomaly)
-        ? ""
-        : ` · Δ ${formatNum(anomaly, 1)} °C`;
-    document.getElementById("readout").textContent =
-        `${formatStamp(active.times[selected])} · ${formatNum(temp, 1)} °C${anomalyText} · ${formatNum(wind, 0)} kt`;
+    const stamp = formatStamp(active.times[selected]);
+    let detail = "";
+
+    if (hoverField === "k-field") {
+        detail = ` · K-index ${formatNum(indexValueAt("k"), 1)}`;
+    } else if (hoverField === "cape-field") {
+        const cape = indexValueAt("cape");
+        const mucape = indexValueAt("mucape");
+        const lifted = indexValueAt("lifted");
+        const virtualLifted = indexValueAt("virtualLifted");
+        const energy = mucape != null && Number.isFinite(mucape) ? mucape : cape;
+        const energyLabel = mucape != null && Number.isFinite(mucape) ? "MUCAPE" : "CAPE";
+        const lift = virtualLifted != null && Number.isFinite(virtualLifted) ? virtualLifted : lifted;
+        const liftLabel = virtualLifted != null && Number.isFinite(virtualLifted) ? "virt. LI" : "LI";
+        detail = ` · ${energyLabel} ${formatNum(energy, 0)} J/kg · ${liftLabel} ${formatNum(lift, 1)}`;
+    } else if (hoverHeight != null && hoverField && FIELD_CANVAS[hoverField] !== undefined) {
+        const fieldName = hoverField === "moist-field" ? moisture : FIELD_CANVAS[hoverField];
+        const scale = SCALES[fieldName];
+        const value = sample(active, fieldName, hoverHeight, selected);
+        const heightKm = active.heights[hoverHeight] / 1000;
+        const digits = fieldName === "THTA" || fieldName === "TEMP" || fieldName === "TEMP_ANOM" ? 1 : 0;
+        detail = ` · ${formatNum(heightKm, 1)} km · ${formatNum(value, digits)} ${scale.unit}`;
+        if (hoverField === "wind-field") {
+            const direction = sample(active, "DRCT", hoverHeight, selected);
+            detail = ` · ${formatNum(heightKm, 1)} km · ${formatNum(direction, 0)}° · ${formatNum(value, 0)} kt`;
+        }
+    } else {
+        const temp = sample(active, "TEMP", 0, selected);
+        const anomaly = sample(active, "TEMP_ANOM", 0, selected);
+        const wind = sample(active, "SKNT", 0, selected);
+        const anomalyText = anomaly == null || !Number.isFinite(anomaly)
+            ? ""
+            : ` · Δ ${formatNum(anomaly, 1)} °C`;
+        detail = ` · ${formatNum(temp, 1)} °C${anomalyText} · ${formatNum(wind, 0)} kt`;
+    }
+
+    document.getElementById("readout").textContent = `${stamp}${detail}`;
 }
 
 function drawFields() {
@@ -735,12 +800,42 @@ function selectIndex(index) {
     updateReadout();
 }
 
+function setHover(canvas, clientX, clientY) {
+    const nextIndex = indexFromCanvas(canvas, clientX);
+    const nextHeight = heightFromCanvas(canvas, clientY);
+    const timeChanged = nextIndex !== selected;
+    const hoverChanged = nextHeight !== hoverHeight || canvas.id !== hoverField;
+    selected = nextIndex;
+    hoverHeight = nextHeight;
+    hoverField = canvas.id;
+    if (!timeChanged && !hoverChanged) return;
+    if (timeChanged) drawProfile();
+    drawCursors();
+    updateReadout();
+}
+
+function clearHover() {
+    if (hoverHeight == null && hoverField == null) return;
+    hoverHeight = null;
+    hoverField = null;
+    drawCursors();
+    updateReadout();
+}
+
 function indexFromCanvas(canvas, clientX) {
     const rect = canvas.getBoundingClientRect();
     const plot = canvas._box.plot;
     const fraction = (clientX - rect.left - plot.x) / plot.w;
     const columns = t1 - t0;
     return t0 + Math.floor(Math.min(0.999, Math.max(0, fraction)) * columns);
+}
+
+function heightFromCanvas(canvas, clientY) {
+    if (FIELD_CANVAS[canvas.id] === undefined) return null;
+    const rect = canvas.getBoundingClientRect();
+    const plot = canvas._box.plot;
+    const fraction = 1 - (clientY - rect.top - plot.y) / plot.h;
+    return Math.min(active.nH - 1, Math.max(0, Math.round(fraction * (active.nH - 1))));
 }
 
 function fillHero() {
@@ -832,6 +927,7 @@ function bindCharts() {
         if (event.pointerType === "mouse") {
             drag = {
                 x: event.clientX,
+                y: event.clientY,
                 index: indexFromCanvas(canvas, event.clientX),
                 canvas,
                 moved: false
@@ -840,7 +936,7 @@ function bindCharts() {
             return;
         }
         dragging = true;
-        selectIndex(indexFromCanvas(canvas, event.clientX));
+        setHover(canvas, event.clientX, event.clientY);
     });
     charts.addEventListener("pointermove", (event) => {
         if (drag) {
@@ -853,9 +949,15 @@ function bindCharts() {
             return;
         }
         const canvas = event.target.closest("canvas.field");
-        if (!canvas || !canvas._box) return;
+        if (!canvas || !canvas._box) {
+            clearHover();
+            return;
+        }
         if (event.pointerType === "touch" && !dragging) return;
-        selectIndex(indexFromCanvas(canvas, event.clientX));
+        setHover(canvas, event.clientX, event.clientY);
+    });
+    charts.addEventListener("pointerleave", () => {
+        if (!drag) clearHover();
     });
     window.addEventListener("pointerup", () => {
         if (drag) {
@@ -864,7 +966,7 @@ function bindCharts() {
                 const hi = Math.max(band.a, band.b) + 1;
                 setView(lo, hi);
             } else {
-                selectIndex(drag.index);
+                setHover(drag.canvas, drag.x, drag.y);
             }
             drag = null;
             band = null;
@@ -889,9 +991,11 @@ function bindCharts() {
     }, { passive: false });
     charts.addEventListener("keydown", (event) => {
         if (event.key === "ArrowLeft") {
+            clearHover();
             selectIndex(selected - 1);
             event.preventDefault();
         } else if (event.key === "ArrowRight") {
+            clearHover();
             selectIndex(selected + 1);
             event.preventDefault();
         }
