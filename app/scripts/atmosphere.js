@@ -124,7 +124,7 @@ function formatStamp(ms) {
 function formatTick(ms, span) {
     const date = new Date(ms);
     if (span > 800 * DAY) return String(date.getUTCFullYear());
-    if (span > 40 * DAY) return `${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+    if (span > 60 * DAY) return `${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
     return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]}`;
 }
 
@@ -267,7 +267,7 @@ function drawTimeAxis(ctx, box) {
     ctx.font = "11px 'Source Sans 3', sans-serif";
     ctx.fillStyle = "#93a4c3";
     ctx.textBaseline = "top";
-    const ticks = span > 800 * DAY ? 5 : 4;
+    const ticks = span > 800 * DAY ? 5 : span > 60 * DAY ? 4 : 7;
     const y = box.plot.y + box.plot.h + 8;
     const plotLeft = box.plot.x;
     const plotRight = box.plot.x + box.plot.w;
@@ -727,25 +727,30 @@ function hoverLabelText(fieldId) {
     return `${formatNum(heightKm, 1)} km · ${formatNum(value, digits)} ${scale.unit}`;
 }
 
-function drawHoverLabel(ctx, plot, x, y, text) {
+function drawHoverLabel(ctx, plot, x, y, text, offset = 12) {
     if (!text) return;
     ctx.save();
     ctx.font = "12px 'Source Sans 3', sans-serif";
     const paddingX = 8;
-    const paddingY = 5;
     const width = ctx.measureText(text).width + paddingX * 2;
     const height = 22;
-    let left = x + 12;
+    let left = x + offset;
     let top = y - height - 10;
-    if (left + width > plot.x + plot.w - 4) left = x - width - 12;
+    if (left + width > plot.x + plot.w - 4) left = x - width - offset;
     if (top < plot.y + 4) top = y + 12;
     if (top + height > plot.y + plot.h - 4) top = plot.y + plot.h - height - 4;
     left = Math.max(plot.x + 4, Math.min(left, plot.x + plot.w - width - 4));
     ctx.fillStyle = "rgba(8, 14, 26, 0.88)";
     ctx.strokeStyle = "rgba(159, 214, 255, 0.45)";
     ctx.lineWidth = 1;
+    const radius = 6;
     ctx.beginPath();
-    ctx.roundRect(left, top, width, height, 6);
+    ctx.moveTo(left + radius, top);
+    ctx.arcTo(left + width, top, left + width, top + height, radius);
+    ctx.arcTo(left + width, top + height, left, top + height, radius);
+    ctx.arcTo(left, top + height, left, top, radius);
+    ctx.arcTo(left, top, left + width, top, radius);
+    ctx.closePath();
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = "#e7eef8";
@@ -834,8 +839,10 @@ function drawCursors() {
             if (field.id === "wind-field" && hoverHeight != null) {
                 const direction = sample(active, "DRCT", hoverHeight, selected);
                 drawWindRose(ctx, x, y, direction);
+                drawHoverLabel(ctx, source.plot, x, y, hoverLabelText(field.id), 34);
+            } else {
+                drawHoverLabel(ctx, source.plot, x, y, hoverLabelText(field.id));
             }
-            drawHoverLabel(ctx, source.plot, x, y, hoverLabelText(field.id));
         }
 
         if (!band) return;
@@ -903,14 +910,7 @@ function setHover(canvas, clientX, clientY) {
     selected = nextIndex;
     hoverHeight = nextHeight;
     hoverField = canvas.id;
-    hoverX = clientX;
-    hoverY = clientY;
-    if (!timeChanged && !hoverChanged) {
-        const tip = document.getElementById("chart-tip");
-        if (tip.hidden) updateReadout();
-        else positionTip(clientX, clientY);
-        return;
-    }
+    if (!timeChanged && !hoverChanged) return;
     if (timeChanged) drawProfile();
     drawCursors();
     updateReadout();
@@ -920,7 +920,6 @@ function clearHover() {
     if (hoverHeight == null && hoverField == null) return;
     hoverHeight = null;
     hoverField = null;
-    document.getElementById("chart-tip").hidden = true;
     drawCursors();
     updateReadout();
 }
@@ -983,7 +982,6 @@ async function applyPeriod(id) {
     band = null;
     hoverHeight = null;
     hoverField = null;
-    document.getElementById("chart-tip").hidden = true;
     drawFields();
 }
 
@@ -1008,7 +1006,6 @@ function setView(start, end) {
     band = null;
     hoverHeight = null;
     hoverField = null;
-    document.getElementById("chart-tip").hidden = true;
     drawFields();
 }
 
