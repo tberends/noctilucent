@@ -66,19 +66,22 @@ const SCALES = {
         ]
     },
     THTA: {
-        // Denser below ~450 K; extended to cover the full column.
+        // Same blue→cream→red family as TEMP. Stops follow layer medians
+        // so troposphere (~6 K std) and stratosphere (~50–110 K std) both move.
         min: 270,
-        max: 1050,
+        max: 1000,
         unit: "K",
         stops: [
-            [270, [24, 28, 64]],
-            [300, [40, 58, 110]],
-            [330, [70, 100, 140]],
-            [380, [150, 140, 120]],
-            [450, [200, 165, 115]],
-            [600, [228, 198, 150]],
-            [800, [240, 226, 198]],
-            [1050, [248, 244, 236]]
+            [270, [18, 32, 74]],
+            [290, [32, 78, 140]],
+            [310, [90, 140, 180]],
+            [330, [150, 196, 214]],
+            [380, [200, 205, 190]],
+            [450, [232, 214, 176]],
+            [600, [222, 165, 115]],
+            [750, [214, 140, 96]],
+            [900, [185, 90, 70]],
+            [1000, [168, 64, 58]]
         ]
     }
 };
@@ -706,18 +709,23 @@ function indexValueAt(key) {
     return value == null || !Number.isFinite(value) ? null : value;
 }
 
-function hoverLabelText(fieldId) {
+function hoverStamp() {
+    return formatStamp(active.times[selected]);
+}
+
+function hoverLabelLines(fieldId) {
+    const time = hoverStamp();
     if (fieldId === "k-field") {
-        return `K ${formatNum(indexValueAt("k"), 1)}`;
+        return [time, `K ${formatNum(indexValueAt("k"), 1)}`];
     }
     if (fieldId === "cape-field") {
         const cape = indexValueAt("cape");
         const mucape = indexValueAt("mucape");
         const energy = mucape != null && Number.isFinite(mucape) ? mucape : cape;
         const energyLabel = mucape != null && Number.isFinite(mucape) ? "MUCAPE" : "CAPE";
-        return `${energyLabel} ${formatNum(energy, 0)}`;
+        return [time, `${energyLabel} ${formatNum(energy, 0)}`];
     }
-    if (hoverHeight == null || FIELD_CANVAS[fieldId] === undefined) return null;
+    if (hoverHeight == null || FIELD_CANVAS[fieldId] === undefined) return [time];
     const fieldName = fieldId === "moist-field" ? moisture : FIELD_CANVAS[fieldId];
     const scale = SCALES[fieldName];
     const value = sample(active, fieldName, hoverHeight, selected);
@@ -726,18 +734,24 @@ function hoverLabelText(fieldId) {
     if (fieldId === "wind-field") {
         const speed = sample(active, "SKNT", hoverHeight, selected);
         const direction = sample(active, "DRCT", hoverHeight, selected);
-        return `${formatNum(heightKm, 1)} km · ${formatNum(direction, 0)}° · ${formatNum(speed, 0)} kt`;
+        return [time, `${formatNum(heightKm, 1)} km · ${formatNum(direction, 0)}° · ${formatNum(speed, 0)} kt`];
     }
-    return `${formatNum(heightKm, 1)} km · ${formatNum(value, digits)} ${scale.unit}`;
+    return [time, `${formatNum(heightKm, 1)} km · ${formatNum(value, digits)} ${scale.unit}`];
 }
 
-function drawHoverLabel(ctx, plot, x, y, text, offset = 12) {
-    if (!text) return;
+function drawHoverLabel(ctx, plot, x, y, lines, offset = 12) {
+    if (!lines || !lines.length) return;
     ctx.save();
     ctx.font = "12px 'Source Sans 3', sans-serif";
     const paddingX = 8;
-    const width = ctx.measureText(text).width + paddingX * 2;
-    const height = 22;
+    const paddingY = 6;
+    const lineHeight = 15;
+    let textWidth = 0;
+    lines.forEach((line) => {
+        textWidth = Math.max(textWidth, ctx.measureText(line).width);
+    });
+    const width = textWidth + paddingX * 2;
+    const height = paddingY * 2 + lineHeight * lines.length - 2;
     let left = x + offset;
     let top = y - height - 10;
     if (left + width > plot.x + plot.w - 4) left = x - width - offset;
@@ -757,10 +771,12 @@ function drawHoverLabel(ctx, plot, x, y, text, offset = 12) {
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = "#e7eef8";
     ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, left + paddingX, top + height / 2);
+    ctx.textBaseline = "top";
+    lines.forEach((line, index) => {
+        ctx.fillStyle = index === 0 ? "#93a4c3" : "#e7eef8";
+        ctx.fillText(line, left + paddingX, top + paddingY + index * lineHeight);
+    });
     ctx.restore();
 }
 
@@ -833,9 +849,9 @@ function drawCursors() {
                 const direction = sample(active, "DRCT", hoverHeight, selected);
                 const speed = sample(active, "SKNT", hoverHeight, selected);
                 drawWindRose(ctx, x, y, direction, speed);
-                drawHoverLabel(ctx, source.plot, x, y, hoverLabelText(field.id), 38);
+                drawHoverLabel(ctx, source.plot, x, y, hoverLabelLines(field.id), 38);
             } else {
-                drawHoverLabel(ctx, source.plot, x, y, hoverLabelText(field.id));
+                drawHoverLabel(ctx, source.plot, x, y, hoverLabelLines(field.id));
             }
         }
 
@@ -850,9 +866,10 @@ function drawCursors() {
 function updateReadout() {
     const stamp = formatStamp(active.times[selected]);
     if (hoverField) {
-        const label = hoverLabelText(hoverField);
-        document.getElementById("readout").textContent = label
-            ? `${stamp} · ${label}`
+        const lines = hoverLabelLines(hoverField);
+        const detail = lines.length > 1 ? lines.slice(1).join(" · ") : "";
+        document.getElementById("readout").textContent = detail
+            ? `${stamp} · ${detail}`
             : stamp;
         return;
     }
