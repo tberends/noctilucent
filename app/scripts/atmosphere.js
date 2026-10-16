@@ -66,15 +66,19 @@ const SCALES = {
         ]
     },
     THTA: {
+        // Denser below ~450 K; extended to cover the full column.
         min: 270,
-        max: 450,
+        max: 1050,
         unit: "K",
         stops: [
             [270, [24, 28, 64]],
-            [300, [48, 72, 120]],
-            [340, [180, 150, 110]],
-            [400, [236, 214, 170]],
-            [450, [248, 244, 236]]
+            [300, [40, 58, 110]],
+            [330, [70, 100, 140]],
+            [380, [150, 140, 120]],
+            [450, [200, 165, 115]],
+            [600, [228, 198, 150]],
+            [800, [240, 226, 198]],
+            [1050, [248, 244, 236]]
         ]
     }
 };
@@ -760,15 +764,15 @@ function drawHoverLabel(ctx, plot, x, y, text, offset = 12) {
     ctx.restore();
 }
 
-function drawWindRose(ctx, x, y, direction) {
+function drawWindRose(ctx, x, y, direction, knots) {
     if (direction == null || !Number.isFinite(direction)) return;
-    const radius = 22;
+    const radius = 26;
     ctx.save();
     ctx.translate(x, y);
 
     ctx.beginPath();
     ctx.arc(0, 0, radius, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(8, 14, 26, 0.72)";
+    ctx.fillStyle = "rgba(8, 14, 26, 0.88)";
     ctx.fill();
     ctx.strokeStyle = "rgba(159, 214, 255, 0.55)";
     ctx.lineWidth = 1.2;
@@ -782,26 +786,15 @@ function drawWindRose(ctx, x, y, direction) {
     ctx.fillText("O", radius - 7, 1);
     ctx.fillText("Z", 0, radius - 6);
     ctx.fillText("W", -radius + 7, 1);
+    ctx.restore();
 
-    // Arrow points toward the direction the wind comes from.
-    ctx.rotate((direction * Math.PI) / 180);
-    ctx.strokeStyle = "#9fd6ff";
-    ctx.fillStyle = "#9fd6ff";
-    ctx.lineWidth = 2.2;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(0, radius - 8);
-    ctx.lineTo(0, -radius + 10);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, -radius + 6);
-    ctx.lineTo(5.5, -radius + 16);
-    ctx.lineTo(-5.5, -radius + 16);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
-    ctx.fill();
+    // Reuse the chart barb so the rose cannot disagree with the vanen.
+    const speed = knots != null && Number.isFinite(knots) ? knots : 10;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(1.35, 1.35);
+    ctx.translate(-x, -y);
+    drawBarb(ctx, x, y, direction, Math.max(5, speed));
     ctx.restore();
 }
 
@@ -838,8 +831,9 @@ function drawCursors() {
         if (activeHover && !band) {
             if (field.id === "wind-field" && hoverHeight != null) {
                 const direction = sample(active, "DRCT", hoverHeight, selected);
-                drawWindRose(ctx, x, y, direction);
-                drawHoverLabel(ctx, source.plot, x, y, hoverLabelText(field.id), 34);
+                const speed = sample(active, "SKNT", hoverHeight, selected);
+                drawWindRose(ctx, x, y, direction, speed);
+                drawHoverLabel(ctx, source.plot, x, y, hoverLabelText(field.id), 38);
             } else {
                 drawHoverLabel(ctx, source.plot, x, y, hoverLabelText(field.id));
             }
