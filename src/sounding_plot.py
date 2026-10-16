@@ -13,7 +13,8 @@ WEB_DIR = Path("app/data")
 HEIGHT_COUNT = 80
 RECENT_DAYS = 60
 ARCHIVE_COLUMNS = 1200
-FIELDS = ["TEMP", "SKNT", "DRCT", "RELH", "MIXR", "THTA"]
+FIELDS = ["TEMP", "SKNT", "DRCT", "RELH", "MIXR", "THTA", "TEMP_ANOM"]
+CORE_FIELDS = ["TEMP", "SKNT", "DRCT", "RELH", "MIXR", "THTA"]
 
 
 def find_tropopause(heights, temps):
@@ -101,7 +102,7 @@ def _series_list(values, digits):
 def _build_grids(frame, times, heights):
     n_h = len(heights)
     n_t = len(times)
-    grids = {name: np.full((n_h, n_t), np.nan, dtype=np.float32) for name in FIELDS}
+    grids = {name: np.full((n_h, n_t), np.nan, dtype=np.float32) for name in CORE_FIELDS}
     tropopause = np.full(n_t, np.nan, dtype=np.float64)
     index = {np.datetime64(stamp, "ns"): i for i, stamp in enumerate(times)}
 
@@ -132,6 +133,33 @@ def _build_grids(frame, times, heights):
         if found is not None:
             tropopause[column] = found
     return grids, tropopause
+
+
+def _monthly_temp_climate(temp_grid, times):
+    """Mean temperature profile per calendar month over the full series. Shape (12, n_h)."""
+    n_h = temp_grid.shape[0]
+    climate = np.full((12, n_h), np.nan, dtype=np.float32)
+    months = pd.to_datetime(times).month.to_numpy(dtype=int)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        for month in range(1, 13):
+            columns = months == month
+            if not columns.any():
+                continue
+            climate[month - 1] = np.nanmean(temp_grid[:, columns], axis=1)
+    return climate
+
+
+def _temperature_anomaly(temp_grid, times, climate):
+    """TEMP minus the climatological monthly mean at each height."""
+    months = pd.to_datetime(times).month.to_numpy(dtype=int)
+    anomaly = np.full(temp_grid.shape, np.nan, dtype=np.float32)
+    for column, month in enumerate(months):
+        profile = climate[month - 1]
+        values = temp_grid[:, column]
+        valid = np.isfinite(values) & np.isfinite(profile)
+        anomaly[valid, column] = values[valid] - profile[valid]
+    return anomaly
 
 
 def _bin_edges(count, bins):
@@ -230,6 +258,14 @@ def _index_payload(station):
     }
 
 
+def _climate_payload(climate):
+    """Serialize 12 monthly mean profiles for meta.json."""
+    rows = []
+    for month in range(12):
+        rows.append([_finite_or_none(value, 2) for value in climate[month]])
+    return rows
+
+
 def _latest_summary(times, grids, tropopause, station):
     stamp = times[-1]
     temp = float(grids["TEMP"][0, -1])
@@ -279,6 +315,9 @@ def export_site():
     heights = np.linspace(low, high, HEIGHT_COUNT)
 
     grids, tropopause = _build_grids(frame, times, heights)
+    climate = _monthly_temp_climate(grids["TEMP"], times)
+    grids["TEMP_ANOM"] = _temperature_anomaly(grids["TEMP"], times, climate)
+
     cutoff = times[-1] - np.timedelta64(RECENT_DAYS, "D")
     recent_index = np.flatnonzero(times >= cutoff)
     if len(recent_index) == 0:
@@ -305,6 +344,7 @@ def export_site():
         "place": "Norderney",
         "heights": [round(float(height), 1) for height in heights],
         "fields": FIELDS,
+        "tempClimate": _climate_payload(climate),
         "latest": _latest_summary(recent_times, recent_grids, recent_tropopause, station),
         "recent": {
             "file": "app/data/recent.bin",

@@ -1,5 +1,6 @@
 const MONTHS = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
-const FIELD_INDEX = { TEMP: 0, SKNT: 1, DRCT: 2, RELH: 3, MIXR: 4, THTA: 5 };
+const FIELD_INDEX = { TEMP: 0, SKNT: 1, DRCT: 2, RELH: 3, MIXR: 4, THTA: 5, TEMP_ANOM: 6 };
+const FIELD_COUNT = 7;
 const DAY = 86400000;
 
 const SCALES = {
@@ -14,6 +15,20 @@ const SCALES = {
             [0, [232, 214, 176]],
             [15, [214, 140, 96]],
             [30, [168, 64, 58]]
+        ]
+    },
+    TEMP_ANOM: {
+        min: -12,
+        max: 12,
+        unit: "°C",
+        stops: [
+            [-12, [24, 56, 120]],
+            [-6, [70, 130, 180]],
+            [-2, [150, 196, 214]],
+            [0, [214, 220, 228]],
+            [2, [232, 200, 160]],
+            [6, [214, 140, 96]],
+            [12, [168, 64, 58]]
         ]
     },
     SKNT: {
@@ -143,7 +158,8 @@ async function loadView(key) {
     const buffer = await response.arrayBuffer();
     const nH = meta.heights.length;
     const nT = spec.times.length;
-    if (buffer.byteLength !== 6 * nH * nT * 4) {
+    const fieldCount = (meta.fields && meta.fields.length) || FIELD_COUNT;
+    if (buffer.byteLength !== fieldCount * nH * nT * 4) {
         throw new Error(`Onverwachte grootte van ${spec.file}`);
     }
     return {
@@ -680,15 +696,20 @@ function drawCursors() {
 
 function updateReadout() {
     const temp = sample(active, "TEMP", 0, selected);
+    const anomaly = sample(active, "TEMP_ANOM", 0, selected);
     const wind = sample(active, "SKNT", 0, selected);
+    const anomalyText = anomaly == null || !Number.isFinite(anomaly)
+        ? ""
+        : ` · Δ ${formatNum(anomaly, 1)} °C`;
     document.getElementById("readout").textContent =
-        `${formatStamp(active.times[selected])} · ${formatNum(temp, 1)} °C · ${formatNum(wind, 0)} kt`;
+        `${formatStamp(active.times[selected])} · ${formatNum(temp, 1)} °C${anomalyText} · ${formatNum(wind, 0)} kt`;
 }
 
 function drawFields() {
     if (!active) return;
     const tempBox = drawHeat(document.getElementById("temp-field"), "TEMP");
     drawTropopause(tempBox);
+    drawHeat(document.getElementById("temp-anom-field"), "TEMP_ANOM");
     const windBox = drawHeat(document.getElementById("wind-field"), "SKNT");
     drawBarbs(windBox);
     drawHeat(document.getElementById("moist-field"), moisture);
@@ -696,6 +717,7 @@ function drawFields() {
     drawK();
     drawCape();
     paintScale("scale-temp", SCALES.TEMP);
+    paintScale("scale-temp-anom", SCALES.TEMP_ANOM);
     paintScale("scale-wind", SCALES.SKNT);
     paintScale("scale-moist", SCALES[moisture]);
     paintScale("scale-theta", SCALES.THTA);
@@ -895,29 +917,6 @@ function bindCharts() {
     });
     observer.observe(document.querySelector(".charts"));
     observer.observe(document.getElementById("profile"));
-    const about = document.querySelector(".about-layout");
-    if (about) {
-        const aboutObserver = new ResizeObserver(() => fitPortrait());
-        aboutObserver.observe(about);
-        fitPortrait();
-    }
-}
-
-function fitPortrait() {
-    const layout = document.querySelector(".about-layout");
-    const copy = document.querySelector(".about-copy");
-    const frame = document.querySelector(".portrait-frame");
-    if (!layout || !copy || !frame) return;
-    const gap = parseFloat(getComputedStyle(layout).columnGap) || 0;
-    let side = 0;
-    for (let pass = 0; pass < 6; pass += 1) {
-        const next = Math.round(copy.getBoundingClientRect().height);
-        const limit = Math.max(120, layout.clientWidth - gap - 200);
-        const fitted = Math.max(120, Math.min(next, limit));
-        if (Math.abs(fitted - side) < 2) break;
-        side = fitted;
-        frame.style.width = `${side}px`;
-    }
 }
 
 function showError(error) {
@@ -936,7 +935,6 @@ async function start() {
     if (document.fonts && document.fonts.ready) {
         document.fonts.ready.then(() => {
             if (active) drawFields();
-            fitPortrait();
         });
     }
 }

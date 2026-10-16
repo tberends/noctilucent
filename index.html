@@ -92,6 +92,14 @@
                             <canvas class="cursor" aria-hidden="true"></canvas>
                         </div>
                         <div class="scale" id="scale-temp"></div>
+                        <div class="card-subhead">
+                            <p>Temperatuurafwijking ten opzichte van het klimatologische maandgemiddelde op elke hoogte over de hele reeks. Blauw is kouder dan normaal, warm is warmer.</p>
+                        </div>
+                        <div class="plot">
+                            <canvas id="temp-anom-field" class="field" aria-label="Temperatuurafwijking tegen hoogte en tijd"></canvas>
+                            <canvas class="cursor" aria-hidden="true"></canvas>
+                        </div>
+                        <div class="scale" id="scale-temp-anom"></div>
                     </article>
 
                     <article class="card">
@@ -206,24 +214,70 @@
         </section>
 
         <section class="wrap about" id="over">
-            <article class="card about-card">
-                <div class="about-layout">
-                    <div class="about-copy">
-                        <h2>Over</h2>
-                        <h3>Yorick de Wijs</h3>
-                        <p class="role">Meteoroloog bij het KNMI</p>
-                        <p>Ik ben meteoroloog bij het Koninklijk Nederlands Meteorologisch Instituut (KNMI). Ik werk aan noctilucente wolken en de hogere atmosfeer.</p>
-                        <p>Op deze site staan de radiosondes van DWD-station 10113 op Norderney.</p>
-                        <p class="about-links">
-                            <a href="https://www.linkedin.com/in/yorick-de-wijs-07799924/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
-                            <a href="https://twitter.com/" target="_blank" rel="noopener noreferrer">Twitter</a>
-                        </p>
+            <h2 class="about-title">Over</h2>
+            <p class="about-lead">Radiosondes van DWD-station 10113 op Norderney, met een klein team erachter.</p>
+            <div class="team">
+                <article class="card about-card">
+                    <div class="about-layout">
+                        <div class="portrait-frame">
+                            <img src="app/images/yorick-de-wijs.jpeg" alt="Yorick de Wijs" class="portrait" width="480" height="360">
+                        </div>
+                        <div class="about-copy">
+                            <h3>Yorick de Wijs</h3>
+                            <p class="role">Veiligheidsmeteoroloog</p>
+                            <p>Ik werk aan noctilucente wolken en de hogere atmosfeer.</p>
+                            <p class="about-links">
+                                <a href="https://www.linkedin.com/in/yorick-de-wijs-07799924/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                            </p>
+                        </div>
                     </div>
-                    <div class="portrait-frame">
-                        <img src="app/images/profile.jpeg" alt="Yorick de Wijs" class="portrait" width="240" height="240">
+                </article>
+                <article class="card about-card">
+                    <div class="about-layout">
+                        <div class="portrait-frame">
+                            <img src="app/images/max-verhagen.jpeg" alt="Max Verhagen" class="portrait" width="480" height="360">
+                        </div>
+                        <div class="about-copy">
+                            <h3>Max Verhagen</h3>
+                            <p class="role">Product owner</p>
+                            <p>Houdt de productrichting van Noctilucent scherp.</p>
+                            <p class="about-links">
+                                <a href="https://www.linkedin.com/in/max-verhagen-33777b6b/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                            </p>
+                        </div>
                     </div>
-                </div>
-            </article>
+                </article>
+                <article class="card about-card">
+                    <div class="about-layout">
+                        <div class="portrait-frame">
+                            <img src="app/images/boudewijn-verkooijen.jpeg" alt="Boudewijn Verkooijen" class="portrait" width="480" height="360">
+                        </div>
+                        <div class="about-copy">
+                            <h3>Boudewijn Verkooijen</h3>
+                            <p class="role">Test engineer</p>
+                            <p>Bewaakt of de metingen en weergave op Noctilucent kloppen.</p>
+                            <p class="about-links">
+                                <a href="https://www.linkedin.com/in/boudewijnverkooijen/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                            </p>
+                        </div>
+                    </div>
+                </article>
+                <article class="card about-card">
+                    <div class="about-layout">
+                        <div class="portrait-frame">
+                            <img src="app/images/thomas-berends.jpeg" alt="Thomas Berends" class="portrait" width="480" height="360">
+                        </div>
+                        <div class="about-copy">
+                            <h3>Thomas Berends</h3>
+                            <p class="role">Data engineer</p>
+                            <p>Bouwt de data-pijplijn van Noctilucent.</p>
+                            <p class="about-links">
+                                <a href="https://www.linkedin.com/in/thomas-berends-2601811b/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                            </p>
+                        </div>
+                    </div>
+                </article>
+            </div>
         </section>
 
         <section class="prose wrap" id="contact">
