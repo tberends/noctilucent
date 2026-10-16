@@ -97,6 +97,8 @@ let range1 = 0;
 let selected = 0;
 let hoverHeight = null;
 let hoverField = null;
+let hoverX = 0;
+let hoverY = 0;
 let band = null;
 let moisture = "RELH";
 let dragging = false;
@@ -730,13 +732,19 @@ function indexValueAt(key) {
     return value == null || !Number.isFinite(value) ? null : value;
 }
 
-function updateReadout() {
-    const stamp = formatStamp(active.times[selected]);
-    let detail = "";
+function hoverWind() {
+    const heightIndex = hoverHeight == null ? 0 : hoverHeight;
+    return {
+        speed: sample(active, "SKNT", heightIndex, selected),
+        direction: sample(active, "DRCT", heightIndex, selected)
+    };
+}
 
+function hoverDetail() {
     if (hoverField === "k-field") {
-        detail = ` · K-index ${formatNum(indexValueAt("k"), 1)}`;
-    } else if (hoverField === "cape-field") {
+        return `K-index ${formatNum(indexValueAt("k"), 1)}`;
+    }
+    if (hoverField === "cape-field") {
         const cape = indexValueAt("cape");
         const mucape = indexValueAt("mucape");
         const lifted = indexValueAt("lifted");
@@ -745,29 +753,70 @@ function updateReadout() {
         const energyLabel = mucape != null && Number.isFinite(mucape) ? "MUCAPE" : "CAPE";
         const lift = virtualLifted != null && Number.isFinite(virtualLifted) ? virtualLifted : lifted;
         const liftLabel = virtualLifted != null && Number.isFinite(virtualLifted) ? "virt. LI" : "LI";
-        detail = ` · ${energyLabel} ${formatNum(energy, 0)} J/kg · ${liftLabel} ${formatNum(lift, 1)}`;
-    } else if (hoverHeight != null && hoverField && FIELD_CANVAS[hoverField] !== undefined) {
+        return `${energyLabel} ${formatNum(energy, 0)} J/kg · ${liftLabel} ${formatNum(lift, 1)}`;
+    }
+    if (hoverHeight != null && hoverField && FIELD_CANVAS[hoverField] !== undefined) {
         const fieldName = hoverField === "moist-field" ? moisture : FIELD_CANVAS[hoverField];
         const scale = SCALES[fieldName];
         const value = sample(active, fieldName, hoverHeight, selected);
         const heightKm = active.heights[hoverHeight] / 1000;
         const digits = fieldName === "THTA" || fieldName === "TEMP" || fieldName === "TEMP_ANOM" ? 1 : 0;
-        detail = ` · ${formatNum(heightKm, 1)} km · ${formatNum(value, digits)} ${scale.unit}`;
         if (hoverField === "wind-field") {
-            const direction = sample(active, "DRCT", hoverHeight, selected);
-            detail = ` · ${formatNum(heightKm, 1)} km · ${formatNum(direction, 0)}° · ${formatNum(value, 0)} kt`;
+            const { speed, direction } = hoverWind();
+            return `${formatNum(heightKm, 1)} km · ${formatNum(direction, 0)}° · ${formatNum(speed, 0)} kt`;
         }
-    } else {
-        const temp = sample(active, "TEMP", 0, selected);
-        const anomaly = sample(active, "TEMP_ANOM", 0, selected);
-        const wind = sample(active, "SKNT", 0, selected);
-        const anomalyText = anomaly == null || !Number.isFinite(anomaly)
-            ? ""
-            : ` · Δ ${formatNum(anomaly, 1)} °C`;
-        detail = ` · ${formatNum(temp, 1)} °C${anomalyText} · ${formatNum(wind, 0)} kt`;
+        return `${formatNum(heightKm, 1)} km · ${formatNum(value, digits)} ${scale.unit}`;
     }
+    const temp = sample(active, "TEMP", 0, selected);
+    const anomaly = sample(active, "TEMP_ANOM", 0, selected);
+    const { speed } = hoverWind();
+    const anomalyText = anomaly == null || !Number.isFinite(anomaly)
+        ? ""
+        : ` · Δ ${formatNum(anomaly, 1)} °C`;
+    return `${formatNum(temp, 1)} °C${anomalyText} · ${formatNum(speed, 0)} kt`;
+}
 
-    document.getElementById("readout").textContent = `${stamp}${detail}`;
+function positionTip(clientX, clientY) {
+    const tip = document.getElementById("chart-tip");
+    if (tip.hidden) return;
+    const pad = 14;
+    const offset = 18;
+    const width = tip.offsetWidth;
+    const height = tip.offsetHeight;
+    let left = clientX + offset;
+    let top = clientY + offset;
+    if (left + width + pad > window.innerWidth) left = clientX - width - offset;
+    if (top + height + pad > window.innerHeight) top = clientY - height - offset;
+    left = Math.max(pad, Math.min(left, window.innerWidth - width - pad));
+    top = Math.max(pad, Math.min(top, window.innerHeight - height - pad));
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+}
+
+function updateTipRose(direction) {
+    const rose = document.getElementById("chart-tip-rose");
+    const arrow = document.getElementById("chart-tip-arrow");
+    const valid = direction != null && Number.isFinite(direction);
+    rose.classList.toggle("is-empty", !valid);
+    arrow.setAttribute("transform", valid ? `rotate(${direction} 24 24)` : "rotate(0 24 24)");
+}
+
+function updateReadout() {
+    const stamp = formatStamp(active.times[selected]);
+    const detail = hoverDetail();
+    document.getElementById("readout").textContent = `${stamp} · ${detail}`;
+
+    const tip = document.getElementById("chart-tip");
+    if (!hoverField) {
+        tip.hidden = true;
+        return;
+    }
+    const { direction } = hoverWind();
+    document.getElementById("chart-tip-time").textContent = stamp;
+    document.getElementById("chart-tip-value").textContent = detail;
+    updateTipRose(direction);
+    tip.hidden = false;
+    positionTip(hoverX, hoverY);
 }
 
 function drawFields() {
@@ -808,7 +857,14 @@ function setHover(canvas, clientX, clientY) {
     selected = nextIndex;
     hoverHeight = nextHeight;
     hoverField = canvas.id;
-    if (!timeChanged && !hoverChanged) return;
+    hoverX = clientX;
+    hoverY = clientY;
+    if (!timeChanged && !hoverChanged) {
+        const tip = document.getElementById("chart-tip");
+        if (tip.hidden) updateReadout();
+        else positionTip(clientX, clientY);
+        return;
+    }
     if (timeChanged) drawProfile();
     drawCursors();
     updateReadout();
@@ -818,6 +874,7 @@ function clearHover() {
     if (hoverHeight == null && hoverField == null) return;
     hoverHeight = null;
     hoverField = null;
+    document.getElementById("chart-tip").hidden = true;
     drawCursors();
     updateReadout();
 }
@@ -878,6 +935,9 @@ async function applyPeriod(id) {
     t1 = range1;
     selected = t1 - 1;
     band = null;
+    hoverHeight = null;
+    hoverField = null;
+    document.getElementById("chart-tip").hidden = true;
     drawFields();
 }
 
@@ -900,6 +960,9 @@ function setView(start, end) {
     }
     if (selected < t0 || selected >= t1) selected = t1 - 1;
     band = null;
+    hoverHeight = null;
+    hoverField = null;
+    document.getElementById("chart-tip").hidden = true;
     drawFields();
 }
 

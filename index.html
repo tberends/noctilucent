@@ -141,6 +141,24 @@
                 <p class="readout" id="readout" aria-live="polite"></p>
             </div>
 
+            <div class="chart-tip" id="chart-tip" hidden>
+                <svg class="chart-tip-rose" id="chart-tip-rose" viewBox="0 0 48 48" aria-hidden="true">
+                    <circle cx="24" cy="24" r="17.5" fill="none"></circle>
+                    <text x="24" y="9.5" text-anchor="middle">N</text>
+                    <text x="41" y="26.5" text-anchor="middle">O</text>
+                    <text x="24" y="44" text-anchor="middle">Z</text>
+                    <text x="7" y="26.5" text-anchor="middle">W</text>
+                    <g id="chart-tip-arrow">
+                        <path d="M24 10 L28.2 26 L24 23.2 L19.8 26 Z"></path>
+                        <path d="M24 38 L28.2 26 L24 28.8 L19.8 26 Z" class="tail"></path>
+                    </g>
+                </svg>
+                <div class="chart-tip-copy">
+                    <p class="chart-tip-time" id="chart-tip-time"></p>
+                    <p class="chart-tip-value" id="chart-tip-value"></p>
+                </div>
+            </div>
+
             <div class="board">
                 <div class="charts" id="charts">
                     <article class="card">
