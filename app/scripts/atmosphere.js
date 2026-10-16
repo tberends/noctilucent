@@ -97,8 +97,6 @@ let range1 = 0;
 let selected = 0;
 let hoverHeight = null;
 let hoverField = null;
-let hoverX = 0;
-let hoverY = 0;
 let band = null;
 let moisture = "RELH";
 let dragging = false;
@@ -685,34 +683,6 @@ function drawProfile() {
     `;
 }
 
-function drawCursors() {
-    document.querySelectorAll(".plot").forEach((plot) => {
-        const field = plot.querySelector(".field");
-        const cursor = plot.querySelector(".cursor");
-        if (!field._box) return;
-        const box = prepare(cursor, field.id === "cape-field" ? 46 : 12);
-        const x = xOfIndex(field._box, selected);
-        box.ctx.strokeStyle = "rgba(247, 244, 239, 0.9)";
-        box.ctx.lineWidth = 1;
-        box.ctx.beginPath();
-        box.ctx.moveTo(x, field._box.plot.y);
-        box.ctx.lineTo(x, field._box.plot.y + field._box.plot.h);
-        box.ctx.stroke();
-        if (hoverHeight != null && hoverField === field.id && FIELD_CANVAS[field.id] !== undefined) {
-            const y = yOfHeight(field._box, active.heights, active.heights[hoverHeight]);
-            box.ctx.beginPath();
-            box.ctx.moveTo(field._box.plot.x, y);
-            box.ctx.lineTo(field._box.plot.x + field._box.plot.w, y);
-            box.ctx.stroke();
-        }
-        if (!band) return;
-        const left = xEdge(field._box, Math.min(band.a, band.b));
-        const right = xEdge(field._box, Math.max(band.a, band.b) + 1);
-        box.ctx.fillStyle = "rgba(159, 214, 255, 0.18)";
-        box.ctx.fillRect(left, field._box.plot.y, Math.max(2, right - left), field._box.plot.h);
-    });
-}
-
 function indexValueAt(key) {
     const times = meta.indices.times;
     const values = meta.indices[key];
@@ -732,91 +702,167 @@ function indexValueAt(key) {
     return value == null || !Number.isFinite(value) ? null : value;
 }
 
-function hoverWind() {
-    const heightIndex = hoverHeight == null ? 0 : hoverHeight;
-    return {
-        speed: sample(active, "SKNT", heightIndex, selected),
-        direction: sample(active, "DRCT", heightIndex, selected)
-    };
-}
-
-function hoverDetail() {
-    if (hoverField === "k-field") {
-        return `K-index ${formatNum(indexValueAt("k"), 1)}`;
+function hoverLabelText(fieldId) {
+    if (fieldId === "k-field") {
+        return `K ${formatNum(indexValueAt("k"), 1)}`;
     }
-    if (hoverField === "cape-field") {
+    if (fieldId === "cape-field") {
         const cape = indexValueAt("cape");
         const mucape = indexValueAt("mucape");
-        const lifted = indexValueAt("lifted");
-        const virtualLifted = indexValueAt("virtualLifted");
         const energy = mucape != null && Number.isFinite(mucape) ? mucape : cape;
         const energyLabel = mucape != null && Number.isFinite(mucape) ? "MUCAPE" : "CAPE";
-        const lift = virtualLifted != null && Number.isFinite(virtualLifted) ? virtualLifted : lifted;
-        const liftLabel = virtualLifted != null && Number.isFinite(virtualLifted) ? "virt. LI" : "LI";
-        return `${energyLabel} ${formatNum(energy, 0)} J/kg · ${liftLabel} ${formatNum(lift, 1)}`;
+        return `${energyLabel} ${formatNum(energy, 0)}`;
     }
-    if (hoverHeight != null && hoverField && FIELD_CANVAS[hoverField] !== undefined) {
-        const fieldName = hoverField === "moist-field" ? moisture : FIELD_CANVAS[hoverField];
-        const scale = SCALES[fieldName];
-        const value = sample(active, fieldName, hoverHeight, selected);
-        const heightKm = active.heights[hoverHeight] / 1000;
-        const digits = fieldName === "THTA" || fieldName === "TEMP" || fieldName === "TEMP_ANOM" ? 1 : 0;
-        if (hoverField === "wind-field") {
-            const { speed, direction } = hoverWind();
-            return `${formatNum(heightKm, 1)} km · ${formatNum(direction, 0)}° · ${formatNum(speed, 0)} kt`;
+    if (hoverHeight == null || FIELD_CANVAS[fieldId] === undefined) return null;
+    const fieldName = fieldId === "moist-field" ? moisture : FIELD_CANVAS[fieldId];
+    const scale = SCALES[fieldName];
+    const value = sample(active, fieldName, hoverHeight, selected);
+    const heightKm = active.heights[hoverHeight] / 1000;
+    const digits = fieldName === "THTA" || fieldName === "TEMP" || fieldName === "TEMP_ANOM" ? 1 : 0;
+    if (fieldId === "wind-field") {
+        const speed = sample(active, "SKNT", hoverHeight, selected);
+        const direction = sample(active, "DRCT", hoverHeight, selected);
+        return `${formatNum(heightKm, 1)} km · ${formatNum(direction, 0)}° · ${formatNum(speed, 0)} kt`;
+    }
+    return `${formatNum(heightKm, 1)} km · ${formatNum(value, digits)} ${scale.unit}`;
+}
+
+function drawHoverLabel(ctx, plot, x, y, text) {
+    if (!text) return;
+    ctx.save();
+    ctx.font = "12px 'Source Sans 3', sans-serif";
+    const paddingX = 8;
+    const paddingY = 5;
+    const width = ctx.measureText(text).width + paddingX * 2;
+    const height = 22;
+    let left = x + 12;
+    let top = y - height - 10;
+    if (left + width > plot.x + plot.w - 4) left = x - width - 12;
+    if (top < plot.y + 4) top = y + 12;
+    if (top + height > plot.y + plot.h - 4) top = plot.y + plot.h - height - 4;
+    left = Math.max(plot.x + 4, Math.min(left, plot.x + plot.w - width - 4));
+    ctx.fillStyle = "rgba(8, 14, 26, 0.88)";
+    ctx.strokeStyle = "rgba(159, 214, 255, 0.45)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(left, top, width, height, 6);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#e7eef8";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, left + paddingX, top + height / 2);
+    ctx.restore();
+}
+
+function drawWindRose(ctx, x, y, direction) {
+    if (direction == null || !Number.isFinite(direction)) return;
+    const radius = 22;
+    ctx.save();
+    ctx.translate(x, y);
+
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(8, 14, 26, 0.72)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(159, 214, 255, 0.55)";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    ctx.fillStyle = "#93a4c3";
+    ctx.font = "9px 'Source Sans 3', sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("N", 0, -radius + 7);
+    ctx.fillText("O", radius - 7, 1);
+    ctx.fillText("Z", 0, radius - 6);
+    ctx.fillText("W", -radius + 7, 1);
+
+    // Arrow points toward the direction the wind comes from.
+    ctx.rotate((direction * Math.PI) / 180);
+    ctx.strokeStyle = "#9fd6ff";
+    ctx.fillStyle = "#9fd6ff";
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(0, radius - 8);
+    ctx.lineTo(0, -radius + 10);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -radius + 6);
+    ctx.lineTo(5.5, -radius + 16);
+    ctx.lineTo(-5.5, -radius + 16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+function drawCursors() {
+    document.querySelectorAll(".plot").forEach((plot) => {
+        const field = plot.querySelector(".field");
+        const cursor = plot.querySelector(".cursor");
+        if (!field._box) return;
+        const source = field._box;
+        const box = prepare(cursor, field.id === "cape-field" ? 46 : 12);
+        const { ctx } = box;
+        const x = xOfIndex(source, selected);
+        ctx.strokeStyle = "rgba(247, 244, 239, 0.9)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, source.plot.y);
+        ctx.lineTo(x, source.plot.y + source.plot.h);
+        ctx.stroke();
+
+        const activeHover = hoverField === field.id;
+        let y = source.plot.y + source.plot.h / 2;
+        if (activeHover && hoverHeight != null && FIELD_CANVAS[field.id] !== undefined) {
+            y = yOfHeight(source, active.heights, active.heights[hoverHeight]);
+            ctx.beginPath();
+            ctx.moveTo(source.plot.x, y);
+            ctx.lineTo(source.plot.x + source.plot.w, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(247, 244, 239, 0.95)";
+            ctx.fill();
         }
-        return `${formatNum(heightKm, 1)} km · ${formatNum(value, digits)} ${scale.unit}`;
-    }
-    const temp = sample(active, "TEMP", 0, selected);
-    const anomaly = sample(active, "TEMP_ANOM", 0, selected);
-    const { speed } = hoverWind();
-    const anomalyText = anomaly == null || !Number.isFinite(anomaly)
-        ? ""
-        : ` · Δ ${formatNum(anomaly, 1)} °C`;
-    return `${formatNum(temp, 1)} °C${anomalyText} · ${formatNum(speed, 0)} kt`;
-}
 
-function positionTip(clientX, clientY) {
-    const tip = document.getElementById("chart-tip");
-    if (tip.hidden) return;
-    const pad = 14;
-    const offset = 18;
-    const width = tip.offsetWidth;
-    const height = tip.offsetHeight;
-    let left = clientX + offset;
-    let top = clientY + offset;
-    if (left + width + pad > window.innerWidth) left = clientX - width - offset;
-    if (top + height + pad > window.innerHeight) top = clientY - height - offset;
-    left = Math.max(pad, Math.min(left, window.innerWidth - width - pad));
-    top = Math.max(pad, Math.min(top, window.innerHeight - height - pad));
-    tip.style.left = `${left}px`;
-    tip.style.top = `${top}px`;
-}
+        if (activeHover && !band) {
+            if (field.id === "wind-field" && hoverHeight != null) {
+                const direction = sample(active, "DRCT", hoverHeight, selected);
+                drawWindRose(ctx, x, y, direction);
+            }
+            drawHoverLabel(ctx, source.plot, x, y, hoverLabelText(field.id));
+        }
 
-function updateTipRose(direction) {
-    const rose = document.getElementById("chart-tip-rose");
-    const arrow = document.getElementById("chart-tip-arrow");
-    const valid = direction != null && Number.isFinite(direction);
-    rose.classList.toggle("is-empty", !valid);
-    arrow.setAttribute("transform", valid ? `rotate(${direction} 24 24)` : "rotate(0 24 24)");
+        if (!band) return;
+        const left = xEdge(source, Math.min(band.a, band.b));
+        const right = xEdge(source, Math.max(band.a, band.b) + 1);
+        ctx.fillStyle = "rgba(159, 214, 255, 0.18)";
+        ctx.fillRect(left, source.plot.y, Math.max(2, right - left), source.plot.h);
+    });
 }
 
 function updateReadout() {
     const stamp = formatStamp(active.times[selected]);
-    const detail = hoverDetail();
-    document.getElementById("readout").textContent = `${stamp} · ${detail}`;
-
-    const tip = document.getElementById("chart-tip");
-    if (!hoverField) {
-        tip.hidden = true;
+    if (hoverField) {
+        const label = hoverLabelText(hoverField);
+        document.getElementById("readout").textContent = label
+            ? `${stamp} · ${label}`
+            : stamp;
         return;
     }
-    const { direction } = hoverWind();
-    document.getElementById("chart-tip-time").textContent = stamp;
-    document.getElementById("chart-tip-value").textContent = detail;
-    updateTipRose(direction);
-    tip.hidden = false;
-    positionTip(hoverX, hoverY);
+    const temp = sample(active, "TEMP", 0, selected);
+    const anomaly = sample(active, "TEMP_ANOM", 0, selected);
+    const wind = sample(active, "SKNT", 0, selected);
+    const anomalyText = anomaly == null || !Number.isFinite(anomaly)
+        ? ""
+        : ` · Δ ${formatNum(anomaly, 1)} °C`;
+    document.getElementById("readout").textContent =
+        `${stamp} · ${formatNum(temp, 1)} °C${anomalyText} · ${formatNum(wind, 0)} kt`;
 }
 
 function drawFields() {
