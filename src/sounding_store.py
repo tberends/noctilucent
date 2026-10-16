@@ -80,7 +80,7 @@ def append_sounding(profiles, station, profile_rows, station_row):
 
 
 def frames_from_legacy(data):
-    """Convert the historical dict-of-frames pickle into the two tables."""
+    """Convert the legacy dict-of-frames pickle into the two tables."""
     profile_frames = []
     station_rows = []
     for item in data.values():

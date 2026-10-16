@@ -1,126 +1,93 @@
-# 🌌 Noctilucent - Atmosferische Analyse Dashboard
+# Noctilucent
 
-Een geavanceerde webtool voor het visualiseren en analyseren van meteorologische sondemetingen (radiosondes) van het Duitse Weerstation Norderney (10113).
+Statische site met radiosondes van DWD-station Norderney (10113). De pagina toont temperatuur, wind, vocht, potentiële temperatuur, K-index, CAPE en lifted index tegen hoogte en tijd.
 
-![Python](https://img.shields.io/badge/Python-3.7+-blue.svg)
-![License](https://img.shields.io/badge/License-MIT-green.svg)
+Bron: University of Wyoming Atmospheric Soundings, product FM35. Meestal twee oplatingen per dag (00:00 en 12:00 UTC), soms ook 06:00 of 18:00. De sonde bereikt doorgaans ongeveer 30 km.
 
-## 📋 Overzicht
+## Vereisten
 
-Noctilucent biedt een uitgebreide atmosferische analyse door middel van interactieve visualisaties van:
-- **Temperatuurprofielen** met WMO-gedefinieerde tropopauze detectie
-- **Windpatronen** (snelheid en richting) voor jet stream analyse
-- **Vochtigheidsmetingen** (relatieve vochtigheid en mengverhouding)
-- **Atmosferische stabiliteit** (potentiële temperatuur, CAPE, K-index)
-- **Convectie-indicatoren** voor onweersbui voorspelling
+- Python 3.13 (zoals in de GitHub Actions-workflow)
+- `pandas`, `numpy`, `pyarrow`, `requests`
 
-## ✨ Features
-
-### 🎯 **Uitgebreide Visualisaties**
-- **Zes kaarten** met een gedeelde tijdlijn
-- **Periodekeuze** van 14 dagen tot het hele archief
-- **Verticaal profiel** van de gekozen oplating
-- **Eigen kleurschaal** per grootheid
-
-### 🌡️ **Meteorologische Parameters**
-1. **Temperatuurprofiel** - Met automatische tropopauze detectie (WMO-definitie)
-2. **Windsnelheid** - Jet stream en windschering identificatie
-3. **Windrichting** - Atmosferische circulatiepatronen
-4. **Relatieve Vochtigheid** - Wolkvorming en neerslag voorspelling
-5. **Mengverhouding** - Conservatieve vochtigheidsmaat
-6. **Potentiële Temperatuur** - Atmosferische stabiliteitsanalyse
-7. **K-Index** - Onweersbui potentieel indicator
-8. **CAPE & Lifted Index** - Convectie-energie en stabiliteit
-
-### 🔬 **Wetenschappelijke Toepassingen**
-- **Weersvoorspelling** - Fronten en inversielagen
-- **Onweersbui-analyse** - CAPE, windschering, stabiliteitsindices
-- **Luchtvaart** - Turbulentie en windschering detectie
-- **Klimaatstudie** - Langetermijntrends in atmosferische structuur
-- **Atmosferische chemie** - Transport van pollutanten
-
-## 🚀 Installatie
-
-### Vereisten
-```bash
-Python 3.7+
-pandas
-numpy
-pyarrow
-```
-
-### Setup
-1. **Clone de repository:**
 ```bash
 git clone https://github.com/tberends/noctilucent.git
 cd noctilucent
+pip install pandas numpy pyarrow requests
 ```
 
-2. **Installeer dependencies:**
+Het archief staat in `data/profiles.parquet` (niveaus) en `data/station.parquet` (stationsindices).
+
+## Gebruik
+
+Nieuwe oplatingen ophalen en de pagina vernieuwen:
+
 ```bash
-pip install pandas numpy pyarrow
+python main.py
 ```
 
-3. **Archief**
-De metingen staan in `data/profiles.parquet` en `data/station.parquet`.
+Alleen de exportbestanden voor de site schrijven:
 
-## 📊 Gebruik
-
-### Paginabestanden genereren
 ```bash
 python src/sounding_plot.py
 ```
-Dit schrijft `app/data/meta.json`, `app/data/recent.bin` en `app/data/archive.bin`. De pagina tekent die bestanden zelf.
 
-### Website
-`index.html` is de GitHub Pages-ingang. Paden zijn relatief, zodat de site zowel op de root als onder `/noctilucent/` werkt.
+Dat levert `app/data/meta.json`, `app/data/recent.bin` en `app/data/archive.bin`. De browser tekent die bestanden in `index.html`.
 
-## 📁 Project Structuur
+Historische gaten vullen (optioneel):
+
+```bash
+python src/sounding_scraper.py --historical
+```
+
+Tijdstempels controleren of corrupte oplatingen verwijderen:
+
+```bash
+python src/clean_data.py
+python src/clean_data.py --clean --backup
+```
+
+## Automatische update
+
+`.github/workflows/python-cron.yml` draait dagelijks om 17:00 UTC (GitHub start de run vaak later) en kan handmatig worden gestart. De job roept `main.py` aan, commit gewijzigde Parquet- en `app/data`-bestanden en pusht naar `main`.
+
+`scrape_sounding` begint bij de laatste opgeslagen oplating en haalt alle latere FM35-tijdstippen uit de Wyoming-inventaris. Als een eerdere run faalde (bijvoorbeeld HTTP 503), vult de volgende geslaagde run die achterstand in één keer aan.
+
+## Projectstructuur
 
 ```
 noctilucent/
-│
+├── main.py                 # scrape + export
+├── index.html              # GitHub Pages-ingang
 ├── src/
-│   └── sounding_plot.py        # Export naar de statische pagina
-│
-├── app/
-│   ├── data/                  # meta.json, recent.bin, archive.bin
-│   ├── styles/
-│   │   └── style.css
-│   ├── scripts/
-│   └── images/
-│
+│   ├── sounding_scraper.py # Wyoming FM35 ophalen
+│   ├── sounding_store.py   # Parquet lezen en schrijven
+│   ├── sounding_plot.py    # export naar app/data
+│   └── clean_data.py       # tijdstempelcontrole
 ├── data/
 │   ├── profiles.parquet
 │   └── station.parquet
-│
-├── index.html
-└── README.md
+├── app/
+│   ├── data/               # meta.json, recent.bin, archive.bin
+│   ├── scripts/
+│   ├── styles/
+│   └── images/
+└── .github/workflows/
+    └── python-cron.yml
 ```
 
-## 🔧 Algoritmes
+Paden in `index.html` zijn relatief, zodat de site zowel op de root als onder `/noctilucent/` werkt.
 
-### Tropopauze Detectie
-Implementeert de **WMO-definitie**:
-- Laagste niveau waar temperatuurgradiënt > -2°C/km
-- Gemiddelde gradiënt in volgende 2km blijft > -2°C/km
-- Minimum zoekaltitude: 5000m
+## Tropopauze
 
-### Stabiliteitsindices
-- **K-Index**: `(T850 - T500) + Td850 - (T700 - Td700)`
-- **CAPE**: Convectieve beschikbare potentiële energie
-- **Lifted Index**: Stabiliteit van atmosferische kolom
+`find_tropopause` volgt de WMO-definitie: het laagste niveau boven 5.000 m waar de temperatuurgradiënt groter is dan −2 °C/km, en waar het gemiddelde over de volgende 2 km ook boven −2 °C/km blijft.
 
-## 🌐 Browser Ondersteuning
+## Data
 
-- ✅ Chrome 80+
-- ✅ Firefox 75+
-- ✅ Safari 13+
-- ✅ Edge 80+
+| Onderdeel | Waarde |
+|---|---|
+| Station | Norderney, DWD 10113 |
+| Frequentie | 00:00 en 12:00 UTC (soms 06:00 of 18:00) |
+| Profiel | oppervlak tot ongeveer 30 km |
+| Indices | onder meer K-index, CAPE/MUCAPE, lifted index |
 
-## 📈 Data Bronnen
-
-- **Station**: Norderney (10113) - Duitse Weerdienst (DWD)
-- **Frequentie**: 2x per dag (00 UTC, 12 UTC)
-- **Altitude**: Oppervlakte tot ~30km
-- **Parameters**: Volledige atmosferische profielen
+De oudere oppervlakte-CAPE en lifted index lopen tot 26 juni 2026. Daarna volgen MUCAPE en de virtuele lifted index uit de FM35-interface.

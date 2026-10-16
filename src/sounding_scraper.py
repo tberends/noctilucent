@@ -1,4 +1,4 @@
-# https://weather.uwyo.edu/wsgi/sounding?datetime=2026-10-09%2012:00:00&id=10113&src=FM35&type=TEXT:LIST
+# Example: https://weather.uwyo.edu/wsgi/sounding?datetime=2026-10-09%2012:00:00&id=10113&src=FM35&type=TEXT:LIST
 
 import pickle
 import re
@@ -68,7 +68,7 @@ def sounding_url(when, station_number, product):
 
 
 class FetchError(RuntimeError):
-    """The sounding server failed after retries. The slot should be tried again later."""
+    """The sounding server failed after retries. Try this slot again later."""
 
 
 def http_get(url, timeout=45, attempts=4):
@@ -179,7 +179,7 @@ def fetch_sounding(when, station_number=STATION_NUMBER):
 
 
 def inventory_times(year, station_number=STATION_NUMBER):
-    """Nominal FM35 times for one year. Year-menu links use type=INVENTORY and are skipped."""
+    """Nominal FM35 times for one year. Year-menu links (type=INVENTORY) are skipped."""
     probe = datetime(year, 1, 1, 0, 0)
     html = http_get(sounding_url(probe, station_number, "INVENTORY"))
     if not html:
@@ -206,7 +206,7 @@ def _stored_times(station):
 
 
 def ensure_archive():
-    """Load the Parquet archive, converting the legacy pickle once if needed."""
+    """Load the Parquet archive, converting a legacy pickle once if needed."""
     profiles = load_profiles()
     station = load_station()
     if not station.empty:
@@ -286,7 +286,7 @@ def scrape_sounding(station_number=STATION_NUMBER):
 
 
 def fetch_single_observation(target_date, station_number=STATION_NUMBER):
-    """Backward-compatible helper. Returns None when the inventory slot is empty."""
+    """Helper for older call sites. Returns None when the inventory slot is empty."""
     observation = fetch_sounding(target_date, station_number)
     if observation is None:
         return None

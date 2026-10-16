@@ -17,7 +17,7 @@ FIELDS = ["TEMP", "SKNT", "DRCT", "RELH", "MIXR", "THTA"]
 
 
 def find_tropopause(heights, temps):
-    """Lowest WMO tropopause: lapse rate above -2 C/km, and the same over the next 2 km."""
+    """Lowest WMO tropopause: lapse rate above -2 C/km, and the same mean over the next 2 km."""
     if len(heights) < 2 or len(temps) < 2:
         return None
 
@@ -324,7 +324,7 @@ def export_site():
 
 
 def plot_sounding():
-    """Backward-compatible name used by main.py."""
+    """Legacy name kept for older call sites such as main.py."""
     export_site()
 
 
