@@ -6,13 +6,19 @@ Bron: University of Wyoming Atmospheric Soundings, product FM35. Meestal twee op
 
 ## Vereisten
 
-- Python 3.13 (zoals in de GitHub Actions-workflow)
-- `pandas`, `numpy`, `pyarrow`, `requests`
+- Python 3.13 (zoals in de GitHub Actions-workflows)
+- Afhankelijkheden staan in `pyproject.toml`
 
 ```bash
 git clone https://github.com/tberends/noctilucent.git
 cd noctilucent
-pip install pandas numpy pyarrow requests
+pip install -e .
+```
+
+Voor ontwikkeling (pytest en HTTP-mocks):
+
+```bash
+pip install -e ".[dev]"
 ```
 
 Het archief staat in `data/profiles.parquet` (niveaus) en `data/station.parquet` (stationsindices).
@@ -46,6 +52,17 @@ python src/clean_data.py
 python src/clean_data.py --clean --backup
 ```
 
+## Testen
+
+De suite onder `tests/` dekt de parsers, het Parquet-archief, de WMO-tropopauzebepaling, de export naar `app/data` en het veldcontract met `atmosphere.js`. HTTP-aanroepen naar Wyoming worden gemockt; er is geen live netwerk nodig.
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
+Fixtures staan in `tests/fixtures/` (ingekorte FM35-HTML van station 10113). `.github/workflows/tests.yml` draait dezelfde suite op Python 3.13 bij elke push naar `main` en bij pull requests.
+
 ## Automatische update
 
 `.github/workflows/python-cron.yml` draait dagelijks om 17:00 UTC (GitHub start de run vaak later) en kan handmatig worden gestart. De job roept `main.py` aan, commit gewijzigde Parquet- en `app/data`-bestanden en pusht naar `main`.
@@ -71,8 +88,11 @@ noctilucent/
 │   ├── scripts/
 │   ├── styles/
 │   └── images/
+├── tests/                  # pytest-suite en fixtures
+├── pyproject.toml
 └── .github/workflows/
-    └── python-cron.yml
+    ├── python-cron.yml
+    └── tests.yml
 ```
 
 Paden in `index.html` zijn relatief, zodat de site zowel op de root als onder `/noctilucent/` werkt.

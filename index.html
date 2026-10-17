@@ -147,27 +147,27 @@
                     <article class="card">
                         <header class="card-head">
                             <h2>Temperatuur</h2>
-                            <p>De lichte lijn is de tropopauze, het laagste niveau waar de gradiënt boven −2 °C/km komt en dat over de volgende 2 km zo blijft.</p>
+                            <p>De lichte lijn is de tropopauze. De anomalie is ten opzichte van het klimatologische maandgemiddelde op elke hoogte: blauw is kouder dan normaal, warm is warmer.</p>
+                            <div class="switch" role="group" aria-label="Temperatuurgrootheid">
+                                <button type="button" data-temperature="TEMP" aria-pressed="true">Temperatuur</button>
+                                <button type="button" data-temperature="TEMP_ANOM" aria-pressed="false">Anomalie</button>
+                            </div>
                         </header>
                         <div class="plot">
                             <canvas id="temp-field" class="field" aria-label="Temperatuur tegen hoogte en tijd"></canvas>
                             <canvas class="cursor" aria-hidden="true"></canvas>
                         </div>
                         <div class="scale" id="scale-temp"></div>
-                        <div class="card-subhead">
-                            <p>Temperatuurafwijking ten opzichte van het klimatologische maandgemiddelde op elke hoogte over de hele reeks. Blauw is kouder dan normaal, warm is warmer.</p>
-                        </div>
-                        <div class="plot">
-                            <canvas id="temp-anom-field" class="field" aria-label="Temperatuurafwijking tegen hoogte en tijd"></canvas>
-                            <canvas class="cursor" aria-hidden="true"></canvas>
-                        </div>
-                        <div class="scale" id="scale-temp-anom"></div>
                     </article>
 
                     <article class="card">
                         <header class="card-head">
                             <h2>Wind</h2>
-                            <p>Kleur is snelheid in knopen. De vanen wijzen naar de richting waar de wind vandaan komt.</p>
+                            <p>Kleur is windsnelheid in knopen, of de anomalie ten opzichte van het klimatologische maandgemiddelde. De vanen tonen altijd de actuele richting.</p>
+                            <div class="switch" role="group" aria-label="Windgrootheid">
+                                <button type="button" data-wind="SKNT" aria-pressed="true">Windsnelheid</button>
+                                <button type="button" data-wind="SKNT_ANOM" aria-pressed="false">Anomalie</button>
+                            </div>
                         </header>
                         <div class="plot">
                             <canvas id="wind-field" class="field" aria-label="Windsnelheid en windrichting"></canvas>
@@ -195,7 +195,11 @@
                     <article class="card">
                         <header class="card-head">
                             <h2>Potentiële temperatuur</h2>
-                            <p>Temperatuur herleid naar 1000 hPa. Een toename met de hoogte wijst op een stabiele laag.</p>
+                            <p>Temperatuur herleid naar 1000 hPa. Een toename met de hoogte wijst op een stabiele laag. De anomalie is ten opzichte van het klimatologische maandgemiddelde.</p>
+                            <div class="switch" role="group" aria-label="Potentiële temperatuurgrootheid">
+                                <button type="button" data-theta="THTA" aria-pressed="true">Potentiële temperatuur</button>
+                                <button type="button" data-theta="THTA_ANOM" aria-pressed="false">Anomalie</button>
+                            </div>
                         </header>
                         <div class="plot">
                             <canvas id="theta-field" class="field" aria-label="Potentiële temperatuur tegen hoogte en tijd"></canvas>
@@ -278,7 +282,7 @@
         <section class="wrap about" id="over">
             <header class="about-head">
                 <h2 class="about-title">Team</h2>
-                <p class="about-lead">Vier mensen achter de radiosondes van Norderney.</p>
+                <p class="about-lead">Radiosondes van DWD-station 10113 op Norderney, met een klein team erachter.</p>
             </header>
             <ul class="team">
                 <li class="team-member">
@@ -287,7 +291,7 @@
                     </div>
                     <h3>Yorick de Wijs</h3>
                     <p class="role">Veiligheidsmeteoroloog</p>
-                    <p class="bio">Lichtende nachtwolken en de hogere atmosfeer</p>
+                    <p class="bio">Onderzoekt lichtende nachtwolken en de hogere atmosfeer boven Norderney.</p>
                     <a class="team-link" href="https://www.linkedin.com/in/yorick-de-wijs-07799924/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
                 </li>
                 <li class="team-member">
@@ -296,7 +300,7 @@
                     </div>
                     <h3>Max Verhagen</h3>
                     <p class="role">Product owner</p>
-                    <p class="bio">Productrichting van Noctilucent</p>
+                    <p class="bio">Bepaalt de productrichting van Noctilucent en wat er ontwikkeld wordt.</p>
                     <a class="team-link" href="https://www.linkedin.com/in/max-verhagen-33777b6b/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
                 </li>
                 <li class="team-member">
@@ -305,7 +309,7 @@
                     </div>
                     <h3>Boudewijn Verkooijen</h3>
                     <p class="role">Test engineer</p>
-                    <p class="bio">Metingen en weergave controleren</p>
+                    <p class="bio">Controleert de sondemetingen en de weergave van Noctilucent op validiteit.</p>
                     <a class="team-link" href="https://www.linkedin.com/in/boudewijnverkooijen/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
                 </li>
                 <li class="team-member">
@@ -314,7 +318,7 @@
                     </div>
                     <h3>Thomas Berends</h3>
                     <p class="role">Data engineer</p>
-                    <p class="bio">Radiosondes ophalen en klaarzetten</p>
+                    <p class="bio">Bouwt de datapijplijn die radiosondes van Norderney ophaalt en visualiseert.</p>
                     <a class="team-link" href="https://www.linkedin.com/in/thomas-berends-2601811b/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
                 </li>
             </ul>

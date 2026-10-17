@@ -20,7 +20,7 @@ jobs:
           python-version: '3.13'
 
       - name: Install dependencies
-        run: pip install requests bs4 numpy pandas pyarrow
+        run: pip install -e .
 
       - name: Retrieve data and create figures
         run: python main.py

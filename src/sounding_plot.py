@@ -13,8 +13,19 @@ WEB_DIR = Path("app/data")
 HEIGHT_COUNT = 80
 RECENT_DAYS = 60
 ARCHIVE_COLUMNS = 1200
-FIELDS = ["TEMP", "SKNT", "DRCT", "RELH", "MIXR", "THTA", "TEMP_ANOM"]
+FIELDS = [
+    "TEMP",
+    "SKNT",
+    "DRCT",
+    "RELH",
+    "MIXR",
+    "THTA",
+    "TEMP_ANOM",
+    "SKNT_ANOM",
+    "THTA_ANOM",
+]
 CORE_FIELDS = ["TEMP", "SKNT", "DRCT", "RELH", "MIXR", "THTA"]
+ANOMALY_SOURCES = {"TEMP_ANOM": "TEMP", "SKNT_ANOM": "SKNT", "THTA_ANOM": "THTA"}
 
 
 def find_tropopause(heights, temps):
@@ -135,9 +146,9 @@ def _build_grids(frame, times, heights):
     return grids, tropopause
 
 
-def _monthly_temp_climate(temp_grid, times):
-    """Mean temperature profile per calendar month over the full series. Shape (12, n_h)."""
-    n_h = temp_grid.shape[0]
+def _monthly_climate(grid, times):
+    """Mean profile per calendar month over the full series. Shape (12, n_h)."""
+    n_h = grid.shape[0]
     climate = np.full((12, n_h), np.nan, dtype=np.float32)
     months = pd.to_datetime(times).month.to_numpy(dtype=int)
     with warnings.catch_warnings():
@@ -146,17 +157,17 @@ def _monthly_temp_climate(temp_grid, times):
             columns = months == month
             if not columns.any():
                 continue
-            climate[month - 1] = np.nanmean(temp_grid[:, columns], axis=1)
+            climate[month - 1] = np.nanmean(grid[:, columns], axis=1)
     return climate
 
 
-def _temperature_anomaly(temp_grid, times, climate):
-    """TEMP minus the climatological monthly mean at each height."""
+def _field_anomaly(grid, times, climate):
+    """Field minus the climatological monthly mean at each height."""
     months = pd.to_datetime(times).month.to_numpy(dtype=int)
-    anomaly = np.full(temp_grid.shape, np.nan, dtype=np.float32)
+    anomaly = np.full(grid.shape, np.nan, dtype=np.float32)
     for column, month in enumerate(months):
         profile = climate[month - 1]
-        values = temp_grid[:, column]
+        values = grid[:, column]
         valid = np.isfinite(values) & np.isfinite(profile)
         anomaly[valid, column] = values[valid] - profile[valid]
     return anomaly
@@ -315,8 +326,11 @@ def export_site():
     heights = np.linspace(low, high, HEIGHT_COUNT)
 
     grids, tropopause = _build_grids(frame, times, heights)
-    climate = _monthly_temp_climate(grids["TEMP"], times)
-    grids["TEMP_ANOM"] = _temperature_anomaly(grids["TEMP"], times, climate)
+    climates = {}
+    for anomaly_name, source_name in ANOMALY_SOURCES.items():
+        climates[source_name] = _monthly_climate(grids[source_name], times)
+        grids[anomaly_name] = _field_anomaly(grids[source_name], times, climates[source_name])
+    climate = climates["TEMP"]
 
     cutoff = times[-1] - np.timedelta64(RECENT_DAYS, "D")
     recent_index = np.flatnonzero(times >= cutoff)

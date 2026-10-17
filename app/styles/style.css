@@ -223,6 +223,11 @@ button:focus-visible {
     cursor: pointer;
 }
 
+.switch button {
+    padding: 0.22rem 0.65rem;
+    font-size: 0.88rem;
+}
+
 .periods button[aria-pressed="true"],
 .switch button[aria-pressed="true"] {
     background: rgba(159, 214, 255, 0.16);
@@ -270,6 +275,10 @@ button:focus-visible {
 
 .card-head p {
     margin: 0.35rem 0 0.7rem;
+}
+
+.card-head .switch {
+    margin: 0 12px 0.75rem 48px;
 }
 
 .plot {
@@ -346,16 +355,6 @@ button:focus-visible {
 .swatch.mucape { border-color: #f3d2c4; }
 .swatch.lifted { border-color: #8eb7e8; }
 .swatch.virtual { border-color: #d5e6f8; }
-
-.card-subhead {
-    margin-top: 0.85rem;
-}
-
-.card-subhead p {
-    margin: 0 0 0.55rem;
-    color: var(--muted);
-    font-size: 0.92rem;
-}
 
 .profile-card {
     position: sticky;

@@ -1,6 +1,16 @@
 const MONTHS = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
-const FIELD_INDEX = { TEMP: 0, SKNT: 1, DRCT: 2, RELH: 3, MIXR: 4, THTA: 5, TEMP_ANOM: 6 };
-const FIELD_COUNT = 7;
+const FIELD_INDEX = {
+    TEMP: 0,
+    SKNT: 1,
+    DRCT: 2,
+    RELH: 3,
+    MIXR: 4,
+    THTA: 5,
+    TEMP_ANOM: 6,
+    SKNT_ANOM: 7,
+    THTA_ANOM: 8
+};
+const FIELD_COUNT = 9;
 const DAY = 86400000;
 
 const SCALES = {
@@ -43,6 +53,20 @@ const SCALES = {
             [120, [255, 252, 245]]
         ]
     },
+    SKNT_ANOM: {
+        min: -30,
+        max: 30,
+        unit: "kt",
+        stops: [
+            [-30, [24, 56, 120]],
+            [-15, [70, 130, 180]],
+            [-5, [150, 196, 214]],
+            [0, [214, 220, 228]],
+            [5, [232, 200, 160]],
+            [15, [214, 140, 96]],
+            [30, [168, 64, 58]]
+        ]
+    },
     RELH: {
         min: 0,
         max: 100,
@@ -55,14 +79,15 @@ const SCALES = {
         ]
     },
     MIXR: {
+        // Archive max ≈ 14.6 g/kg near the surface; 12 clipped humid peaks.
         min: 0,
-        max: 12,
+        max: 15,
         unit: "g/kg",
         stops: [
             [0, [16, 28, 40]],
             [3, [36, 90, 110]],
             [8, [120, 190, 180]],
-            [12, [236, 244, 232]]
+            [15, [236, 244, 232]]
         ]
     },
     THTA: {
@@ -82,6 +107,20 @@ const SCALES = {
             [750, [214, 140, 96]],
             [900, [185, 90, 70]],
             [1000, [168, 64, 58]]
+        ]
+    },
+    THTA_ANOM: {
+        min: -20,
+        max: 20,
+        unit: "K",
+        stops: [
+            [-20, [24, 56, 120]],
+            [-10, [70, 130, 180]],
+            [-3, [150, 196, 214]],
+            [0, [214, 220, 228]],
+            [3, [232, 200, 160]],
+            [10, [214, 140, 96]],
+            [20, [168, 64, 58]]
         ]
     }
 };
@@ -106,15 +145,27 @@ let hoverHeight = null;
 let hoverField = null;
 let band = null;
 let moisture = "RELH";
+let temperature = "TEMP";
+let windField = "SKNT";
+let theta = "THTA";
 let dragging = false;
+let activePeriod = "60d";
+let lastTap = 0;
 
 const FIELD_CANVAS = {
-    "temp-field": "TEMP",
-    "temp-anom-field": "TEMP_ANOM",
-    "wind-field": "SKNT",
+    "temp-field": null,
+    "wind-field": null,
     "moist-field": null,
-    "theta-field": "THTA"
+    "theta-field": null
 };
+
+function fieldForCanvas(fieldId) {
+    if (fieldId === "temp-field") return temperature;
+    if (fieldId === "wind-field") return windField;
+    if (fieldId === "moist-field") return moisture;
+    if (fieldId === "theta-field") return theta;
+    return FIELD_CANVAS[fieldId];
+}
 
 function formatNum(value, digits) {
     if (value == null || !Number.isFinite(Number(value))) return "geen";
@@ -726,14 +777,20 @@ function hoverLabelLines(fieldId) {
         return [time, `${energyLabel} ${formatNum(energy, 0)}`];
     }
     if (hoverHeight == null || FIELD_CANVAS[fieldId] === undefined) return [time];
-    const fieldName = fieldId === "moist-field" ? moisture : FIELD_CANVAS[fieldId];
+    const fieldName = fieldForCanvas(fieldId);
     const scale = SCALES[fieldName];
     const value = sample(active, fieldName, hoverHeight, selected);
     const heightKm = active.heights[hoverHeight] / 1000;
-    const digits = fieldName === "THTA" || fieldName === "TEMP" || fieldName === "TEMP_ANOM" ? 1 : 0;
+    const digits = fieldName === "SKNT" || fieldName === "RELH" ? 0 : 1;
     if (fieldId === "wind-field") {
         const speed = sample(active, "SKNT", hoverHeight, selected);
         const direction = sample(active, "DRCT", hoverHeight, selected);
+        if (windField === "SKNT_ANOM") {
+            return [
+                time,
+                `${formatNum(heightKm, 1)} km · Δ ${formatNum(value, 1)} kt · ${formatNum(direction, 0)}° · ${formatNum(speed, 0)} kt`
+            ];
+        }
         return [time, `${formatNum(heightKm, 1)} km · ${formatNum(direction, 0)}° · ${formatNum(speed, 0)} kt`];
     }
     return [time, `${formatNum(heightKm, 1)} km · ${formatNum(value, digits)} ${scale.unit}`];
@@ -883,22 +940,32 @@ function updateReadout() {
         `${stamp} · ${formatNum(temp, 1)} °C${anomalyText} · ${formatNum(wind, 0)} kt`;
 }
 
+function drawTempField() {
+    const tempBox = drawHeat(document.getElementById("temp-field"), temperature);
+    if (temperature === "TEMP") drawTropopause(tempBox);
+    paintScale("scale-temp", SCALES[temperature]);
+}
+
+function drawWindField() {
+    const windBox = drawHeat(document.getElementById("wind-field"), windField);
+    drawBarbs(windBox);
+    paintScale("scale-wind", SCALES[windField]);
+}
+
+function drawThetaField() {
+    drawHeat(document.getElementById("theta-field"), theta);
+    paintScale("scale-theta", SCALES[theta]);
+}
+
 function drawFields() {
     if (!active) return;
-    const tempBox = drawHeat(document.getElementById("temp-field"), "TEMP");
-    drawTropopause(tempBox);
-    drawHeat(document.getElementById("temp-anom-field"), "TEMP_ANOM");
-    const windBox = drawHeat(document.getElementById("wind-field"), "SKNT");
-    drawBarbs(windBox);
+    drawTempField();
+    drawWindField();
     drawHeat(document.getElementById("moist-field"), moisture);
-    drawHeat(document.getElementById("theta-field"), "THTA");
+    drawThetaField();
     drawK();
     drawCape();
-    paintScale("scale-temp", SCALES.TEMP);
-    paintScale("scale-temp-anom", SCALES.TEMP_ANOM);
-    paintScale("scale-wind", SCALES.SKNT);
     paintScale("scale-moist", SCALES[moisture]);
-    paintScale("scale-theta", SCALES.THTA);
     drawProfile();
     drawCursors();
     updateReadout();
@@ -972,6 +1039,7 @@ function fillHero() {
 
 async function applyPeriod(id) {
     const period = PERIODS[id];
+    activePeriod = id;
     document.querySelectorAll("[data-period]").forEach((button) => {
         button.setAttribute("aria-pressed", button.dataset.period === id ? "true" : "false");
     });
@@ -994,6 +1062,24 @@ async function applyPeriod(id) {
     hoverHeight = null;
     hoverField = null;
     drawFields();
+}
+
+function resetToPeriod() {
+    if (!active || !PERIODS[activePeriod]) return;
+    t0 = range0;
+    t1 = range1;
+    band = null;
+    hoverHeight = null;
+    hoverField = null;
+    if (selected < t0 || selected >= t1) selected = t1 - 1;
+    drawFields();
+}
+
+function plotFromEvent(event) {
+    const direct = event.target.closest?.("canvas.field, .plot");
+    if (direct) return direct.closest(".plot") || direct;
+    const under = document.elementFromPoint(event.clientX, event.clientY);
+    return under?.closest?.("canvas.field, .plot") || null;
 }
 
 function setView(start, end) {
@@ -1076,14 +1162,22 @@ function bindCharts() {
     charts.addEventListener("pointerleave", () => {
         if (!drag) clearHover();
     });
-    window.addEventListener("pointerup", () => {
+    window.addEventListener("pointerup", (event) => {
         if (drag) {
-            if (drag.moved && band) {
+            const now = performance.now();
+            if (!drag.moved) {
+                const isDouble = now - lastTap < 350;
+                lastTap = now;
+                if (isDouble) {
+                    resetToPeriod();
+                } else {
+                    setHover(drag.canvas, drag.x, drag.y);
+                }
+            } else if (band) {
+                lastTap = 0;
                 const lo = Math.min(band.a, band.b);
                 const hi = Math.max(band.a, band.b) + 1;
                 setView(lo, hi);
-            } else {
-                setHover(drag.canvas, drag.x, drag.y);
             }
             drag = null;
             band = null;
@@ -1092,11 +1186,9 @@ function bindCharts() {
         dragging = false;
     });
     charts.addEventListener("dblclick", (event) => {
-        if (!event.target.closest("canvas.field")) return;
-        t0 = range0;
-        t1 = range1;
-        band = null;
-        drawFields();
+        if (!plotFromEvent(event)) return;
+        event.preventDefault();
+        resetToPeriod();
     });
     charts.addEventListener("wheel", (event) => {
         if (!event.ctrlKey && !event.metaKey) return;
@@ -1130,6 +1222,36 @@ function bindCharts() {
             });
             drawHeat(document.getElementById("moist-field"), moisture);
             paintScale("scale-moist", SCALES[moisture]);
+            drawCursors();
+        });
+    });
+    document.querySelectorAll("[data-temperature]").forEach((button) => {
+        button.addEventListener("click", () => {
+            temperature = button.dataset.temperature;
+            document.querySelectorAll("[data-temperature]").forEach((item) => {
+                item.setAttribute("aria-pressed", item === button ? "true" : "false");
+            });
+            drawTempField();
+            drawCursors();
+        });
+    });
+    document.querySelectorAll("[data-wind]").forEach((button) => {
+        button.addEventListener("click", () => {
+            windField = button.dataset.wind;
+            document.querySelectorAll("[data-wind]").forEach((item) => {
+                item.setAttribute("aria-pressed", item === button ? "true" : "false");
+            });
+            drawWindField();
+            drawCursors();
+        });
+    });
+    document.querySelectorAll("[data-theta]").forEach((button) => {
+        button.addEventListener("click", () => {
+            theta = button.dataset.theta;
+            document.querySelectorAll("[data-theta]").forEach((item) => {
+                item.setAttribute("aria-pressed", item === button ? "true" : "false");
+            });
+            drawThetaField();
             drawCursors();
         });
     });
