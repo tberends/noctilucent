@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import requests
+import urllib3
 
 from src.sounding_store import (
     MS_TO_KNOTS,
@@ -71,8 +72,14 @@ class FetchError(RuntimeError):
     """The sounding server failed after retries. Try this slot again later."""
 
 
+# weather.uwyo.edu sometimes serves a chain that Python/certifi rejects.
+# After the first SSL failure we retry without verification for this process.
+_ssl_verify = True
+
+
 def http_get(url, timeout=45, attempts=4):
     """GET text. A missing sounding (HTTP 400 or 404) returns None."""
+    global _ssl_verify
     last_error = None
     for attempt in range(attempts):
         try:
@@ -80,6 +87,7 @@ def http_get(url, timeout=45, attempts=4):
                 url,
                 timeout=timeout,
                 headers={"User-Agent": USER_AGENT},
+                verify=_ssl_verify,
             )
             if response.status_code in (400, 404):
                 return None
@@ -87,6 +95,20 @@ def http_get(url, timeout=45, attempts=4):
                 raise requests.HTTPError(f"HTTP {response.status_code}")
             response.raise_for_status()
             return response.text
+        except requests.exceptions.SSLError as error:
+            # SSLError subclasses ConnectionError; handle it before the generic case.
+            last_error = error
+            if _ssl_verify:
+                warnings.warn(
+                    "SSL verification failed for sounding server; "
+                    "continuing without certificate checks.",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+                urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+                _ssl_verify = False
+                continue
+            time.sleep(2 ** attempt)
         except (requests.Timeout, requests.ConnectionError, requests.HTTPError) as error:
             last_error = error
             time.sleep(2 ** attempt)

@@ -8,6 +8,7 @@ import pytest
 import requests
 import responses
 
+import src.sounding_scraper as sounding_scraper
 from src.sounding_scraper import (
     FetchError,
     fetch_sounding,
@@ -18,6 +19,13 @@ from src.sounding_scraper import (
     sounding_url,
 )
 from src.sounding_store import MS_TO_KNOTS, PROFILE_VALUE_COLUMNS
+
+
+@pytest.fixture(autouse=True)
+def reset_ssl_verify():
+    sounding_scraper._ssl_verify = True
+    yield
+    sounding_scraper._ssl_verify = True
 
 
 def test_sounding_url_encodes_datetime_and_product():
@@ -92,6 +100,24 @@ def test_http_get_retries_server_errors_then_raises():
     with patch("src.sounding_scraper.time.sleep"):
         with pytest.raises(FetchError):
             http_get(url, attempts=2)
+
+
+def test_http_get_falls_back_when_ssl_verify_fails():
+    url = "https://weather.uwyo.edu/wsgi/sounding?ssl=1"
+    ok = requests.Response()
+    ok.status_code = 200
+    ok._content = b"payload"
+
+    def fake_get(request_url, timeout=45, headers=None, verify=True):
+        assert request_url == url
+        if verify:
+            raise requests.exceptions.SSLError("certificate verify failed")
+        return ok
+
+    with patch("src.sounding_scraper.requests.get", side_effect=fake_get):
+        with pytest.warns(RuntimeWarning, match="SSL verification failed"):
+            assert http_get(url, attempts=2) == "payload"
+    assert sounding_scraper._ssl_verify is False
 
 
 @responses.activate
