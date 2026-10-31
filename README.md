@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="app/images/icon-192.png" alt="Noctilucent" width="96" height="96">
+</p>
+
 # Noctilucent
 
 Statische site met radiosondes van DWD-station Norderney (10113). De pagina toont temperatuur, wind, vocht, potentiële temperatuur, K-index, CAPE en lifted index tegen hoogte en tijd.

@@ -163,3 +163,6 @@ cython_debug/
 data/*.pkl
 app/visualizations/sounding_plot.html
 .DS_Store
+
+# Temporary local assets (icon keuze, etc.)
+tmp/
