@@ -673,6 +673,17 @@ button:focus-visible {
         width: min(var(--width), calc(100% - 1.25rem));
     }
 
+    /* Opaque header: Safari 26 tints its glass top bar from a solid sticky
+       header instead of blurring over it; extra gap clears the edge effect. */
+    .site-header {
+        gap: 0.75rem;
+        padding-top: calc(env(safe-area-inset-top) + 0.6rem);
+        padding-bottom: 0.6rem;
+        background: var(--bg);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
     .menu-toggle {
         display: inline-block;
         min-height: 2.5rem;
@@ -692,7 +703,7 @@ button:focus-visible {
             max(1rem, env(safe-area-inset-right))
             max(0.8rem, env(safe-area-inset-bottom))
             max(1rem, env(safe-area-inset-left));
-        background: var(--header);
+        background: var(--bg);
         border-bottom: 1px solid var(--line);
     }
 
@@ -714,27 +725,54 @@ button:focus-visible {
     }
 
     .stats {
-        grid-template-columns: 1fr 1fr;
-        gap: 0.65rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.5rem;
+    }
+
+    .stats div {
+        padding: 0.55rem 0.75rem 0.6rem;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+    }
+
+    .stats dt {
+        line-height: 1.3;
     }
 
     .stats dd {
-        font-size: 1.2rem;
+        margin-top: 0.1rem;
+        font-size: 1.15rem;
+        line-height: 1.25;
+        white-space: nowrap;
     }
 
     .toolbar {
         flex-direction: column;
         align-items: stretch;
+        gap: 0.6rem;
     }
 
+    /* Single-row segmented control */
     .periods {
         width: 100%;
+        flex-wrap: nowrap;
+        gap: 0;
+        padding: 3px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--card);
     }
 
     .periods button {
-        flex: 1 1 calc(50% - 0.2rem);
-        min-height: 2.5rem;
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: 2.4rem;
+        padding: 0.3rem 0.25rem;
+        border-color: transparent;
+        font-size: 0.95rem;
         text-align: center;
+        white-space: nowrap;
     }
 
     .readout {
@@ -812,14 +850,6 @@ button:focus-visible {
 }
 
 @media (max-width: 380px) {
-    .stats {
-        grid-template-columns: 1fr;
-    }
-
-    .periods button {
-        flex-basis: 100%;
-    }
-
     .team {
         grid-template-columns: 1fr;
     }
